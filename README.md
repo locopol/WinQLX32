@@ -4,7 +4,7 @@ WinQLX32
 minqlx is a modification to the Quake Live Dedicated Server that extends Quake Live's dedicated server with
 extra functionality and allows scripting of server behavior through an embedded Python interpreter.
 
-This version is a **port** of original **minqlx** developed by *MinoMino* (https://github.com/MinoMino/minqlx) 
+This version is a native **port** of original **minqlx** developed by *MinoMino* (https://github.com/MinoMino/minqlx) 
 and the enhancements of *tjone270* (https://github.com/tjone270/minqlxtended) to made compatible with Windows 
 and official 32 bit version of Steam binaries of **Quake Live** (1069 compilation)
 
@@ -35,22 +35,14 @@ Configuration
         Default: plugin_manager, essentials, motd, permission, ban, silence, clan, names, log, workshop.
     qlx_pluginsPath: The path (either relative or absolute) to the directory with the plugins.
         Default: minqlx-plugins
-    qlx_database: The default database to use. You should not change this unless you know what you're doing. (deprecated)
-        Default: Redis 
     qlx_commandPrefix: The prefix used before command names in order to execute them.
         Default: !
-    qlx_redisAddress: The address to the Redis database. Can be a path if qlx_redisUnixSocket is "1". (deprecated)
-        Default: 127.0.0.1
-    qlx_redisDatabase: The Redis database number. (deprecated)
-        Default: 0
-    qlx_redisUnixSocket: A boolean that determines whether or not qlx_redisAddress is a path to a UNIX socket. (deprecated)
-        Default: 0
-    qlx_redisPassword: The password to the Redis server, if any. (deprecated)
-        Default: None
     qlx_logs: The maximum number of logs the server keeps. 0 means no limit.
         Default: 5
     qlx_logsSize: The maximum size in bytes of a log before it backs it up and starts on a fresh file. 0 means no limit.
         Default: 5000000 (5 MB)
+
+    (NOTE): All redis Cvars are deprecated, all db logic is controlled by the redis wrapper to store data via "Shelve Python module" to store persistent data in database file relative to winqlx.dll path.
 
 
 Usage
@@ -102,7 +94,7 @@ If you want modify some parts of core for testing or debugging, the source code 
             - `cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -B build -DPY_PATH=<your Python path installation>`
     - compile with: `cmake --build build --config Release`
 
-    - After succesful compilation, the dll file (winqlx.dll) and zip file (minqlx.zip) are copied to `bin\` directory, put these files into Quake Live installation directory and test. *(remember put the embed python in deps\python_embed directory and minqlx-plugins in base Quake Live directory)*.
+    - After succesful compilation, the dll file (`winqlx.dll`), the zip file (`minqlx.zip`) and `launcher.exe` are copied to `bin\` directory, put these files into Quake Live installation directory and test. *(remember put the embed python version in deps\python_embed directory and minqlx-plugins in base Quake Live directory)*.
 
 Contribute
 ==========
