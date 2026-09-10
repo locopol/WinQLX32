@@ -63,6 +63,7 @@ def handle_client_command(client_id, cmd):
     """
     try:
         # Dispatch the "client_command" event before further processing.
+        logger = minqlx.get_logger()
         player = minqlx.Player(client_id)
         retval = minqlx.EVENT_DISPATCHERS["client_command"].dispatch(player, cmd)
         if retval is False:
@@ -167,10 +168,12 @@ def handle_server_command(client_id, cmd):
         # Dispatch the "server_command" event before further processing.
         try:
             player = minqlx.Player(client_id) if client_id >= 0 else None
+        
         except minqlx.NonexistentPlayerError:
             return True
 
         retval = minqlx.EVENT_DISPATCHERS["server_command"].dispatch(player, cmd)
+        
         if retval is False:
             return False
         elif isinstance(retval, str):
@@ -232,6 +235,8 @@ _ad_round_number = 0
 def handle_new_game(is_restart):
     # This is called early in the launch process, so it's a good place to initialize
     # minqlx stuff that needs QLDS to be initialized.
+    
+    logger = minqlx.get_logger()
     global _first_game
     if _first_game:
         minqlx.late_init()
@@ -240,11 +245,9 @@ def handle_new_game(is_restart):
         # A good place to warn the owner if ZMQ stats are disabled.
         global _zmq_warning_issued
         if not bool(int(minqlx.get_cvar("zmq_stats_enable"))) and not _zmq_warning_issued:
-            logger = minqlx.get_logger()
             logger.warning("Some events will not work because ZMQ stats is not enabled. "
                 "Launch the server with \"zmq_stats_enable 1\"")
             _zmq_warning_issued = True
-
     minqlx.set_map_subtitles()
 
     if not is_restart:
@@ -306,7 +309,7 @@ def handle_set_configstring(index, value):
                 elif old_state == "COUNT_DOWN" and new_state == "PRE_GAME":
                     pass
                 else:
-                    logger = minqlx.get_logger()
+                    #logger = minqlx.get_logger()
                     logger.warning("UNKNOWN GAME STATES: {} - {}".format(old_state, new_state))
         # ROUND COUNTDOWN AND START
         elif index == 661:

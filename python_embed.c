@@ -1,16 +1,39 @@
-#include <Python.h>
-#include <patchlevel.h>
-#include <structmember.h>
-#include <structseq.h>
+/*
+Copyright (C) 2015 Mino <mino@minomino.org>
+Copyright (C) 2022-2026 Thomas Jones <me@thomasjones.id.au>
+Copyright (C) 2026 Paul Asalgado <locopol@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include <windows.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <MinHook.h> 
+#include <errno.h>
+
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <stdio.h>
 
-#include "pyminqlx.h"
-#include "quake_common.h"
+#include <wchar.h>
+
 #include "patterns.h"
-#include "common.h"
+#include "quake_common.h"
+#include "winqlx_common.h" 
+
+extern __declspec(dllexport) PyObject* __cdecl PyMinqlx_InitModule(void); // win32
 
 PyObject* client_command_handler = NULL;
 PyObject* server_command_handler = NULL;
@@ -40,10 +63,10 @@ static int initialized = 0;
 static const char loader[] = "import traceback\n" \
     "try:\n" \
     "  import sys\n" \
-	"  sys.path.append('" CORE_MODULE "')\n" \
+    "  sys.path.append('" CORE_MODULE "')\n" \
     "  sys.path.append('.')\n" \
-	"  import minqlx\n" \
-	"  minqlx.initialize()\n" \
+    "  import minqlx\n" \
+    "  minqlx.initialize()\n" \
     "  ret = True\n" \
     "except Exception as e:\n" \
     "  e = traceback.format_exc().rstrip('\\n')\n" \
@@ -56,15 +79,15 @@ static const char loader[] = "import traceback\n" \
  * pairs and iterate over them instead.
  */
 static handler_t handlers[] = {
-		{"client_command", 		&client_command_handler},
-		{"server_command", 		&server_command_handler},
-		{"frame", 				&frame_handler},
-		{"player_connect", 		&client_connect_handler},
-		{"player_loaded", 		&client_loaded_handler},
-		{"player_disconnect", 	&client_disconnect_handler},
-		{"custom_command", 		&custom_command_handler},
-		{"new_game",			&new_game_handler},
-		{"set_configstring", 	&set_configstring_handler},
+        {"client_command",      &client_command_handler},
+        {"server_command",      &server_command_handler},
+        {"frame",               &frame_handler},
+        {"player_connect",      &client_connect_handler},
+        {"player_loaded",       &client_loaded_handler},
+        {"player_disconnect",   &client_disconnect_handler},
+        {"custom_command",      &custom_command_handler},
+        {"new_game",            &new_game_handler},
+        {"set_configstring",    &set_configstring_handler},
         {"rcon",                &rcon_handler},
         {"console_print",       &console_print_handler},
         {"player_spawn",        &client_spawn_handler},
@@ -72,7 +95,7 @@ static handler_t handlers[] = {
         {"kamikaze_use",        &kamikaze_use_handler},
         {"kamikaze_explode",    &kamikaze_explode_handler},
 
-		{NULL, NULL}
+        {NULL, NULL}
 };
 
 /*
@@ -231,15 +254,19 @@ static PyObject* makePlayerTuple(int client_id) {
     PyObject *name, *team, *priv;
     PyObject* cid = PyLong_FromLongLong(client_id);
 
+
     if (g_entities[client_id].client != NULL) {
-        if (g_entities[client_id].client->pers.connected == CON_DISCONNECTED)
+
+        if (g_entities[client_id].client->pers.connected == CON_DISCONNECTED) 
             name = PyUnicode_FromString("");
-        else
+
+        else 
             name = PyUnicode_DecodeUTF8(g_entities[client_id].client->pers.netname,
                 strlen(g_entities[client_id].client->pers.netname), "ignore");
 
         if (g_entities[client_id].client->pers.connected == CON_DISCONNECTED)
             team = PyLong_FromLongLong(TEAM_SPECTATOR); // Set team to spectator if not yet connected.
+
         else
             team = PyLong_FromLongLong(g_entities[client_id].client->sess.sessionTeam);
 
@@ -254,7 +281,6 @@ static PyObject* makePlayerTuple(int client_id) {
     PyObject* state = PyLong_FromLongLong(svs->clients[client_id].state);
     PyObject* userinfo = PyUnicode_DecodeUTF8(svs->clients[client_id].userinfo, strlen(svs->clients[client_id].userinfo), "ignore");
     PyObject* steam_id = PyLong_FromLongLong(svs->clients[client_id].steam_id);
-
     PyObject* info = PyStructSequence_New(&player_info_type);
     PyStructSequence_SetItem(info, 0, cid);
     PyStructSequence_SetItem(info, 1, name);
@@ -290,19 +316,19 @@ static PyObject* PyMinqlx_PlayerInfo(PyObject* self, PyObject* args) {
 }
 
 static PyObject* PyMinqlx_PlayersInfo(PyObject* self, PyObject* args) {
-	PyObject* ret = PyList_New(sv_maxclients->integer);
+    PyObject* ret = PyList_New(sv_maxclients->integer);
 
-	for (int i = 0; i < sv_maxclients->integer; i++) {
-		if (svs->clients[i].state == CS_FREE) {
-			if (PyList_SetItem(ret, i, Py_None) == -1)
+    for (int i = 0; i < sv_maxclients->integer; i++) {
+        if (svs->clients[i].state == CS_FREE) {
+            if (PyList_SetItem(ret, i, Py_None) == -1)
                         return NULL;
             Py_INCREF(Py_None);
             continue;
-		}
+        }
 
-		if (PyList_SetItem(ret, i, makePlayerTuple(i)) == -1)
-			return NULL;
-	}
+        if (PyList_SetItem(ret, i, makePlayerTuple(i)) == -1)
+            return NULL;
+    }
 
     return ret;
 }
@@ -378,14 +404,14 @@ static PyObject* PyMinqlx_ClientCommand(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "is:client_command", &i, &cmd))
         return NULL;
 
-	if (i >= 0 && i < sv_maxclients->integer) {
-		if (svs->clients[i].state == CS_FREE || svs->clients[i].state == CS_ZOMBIE)
-			Py_RETURN_FALSE;
-		else {
-			My_SV_ExecuteClientCommand(&svs->clients[i], cmd, qtrue);
-			Py_RETURN_TRUE;
-		}
-	}
+    if (i >= 0 && i < sv_maxclients->integer) {
+        if (svs->clients[i].state == CS_FREE || svs->clients[i].state == CS_ZOMBIE)
+            Py_RETURN_FALSE;
+        else {
+            My_SV_ExecuteClientCommand(&svs->clients[i], cmd, qtrue);
+            Py_RETURN_TRUE;
+        }
+    }
 
     PyErr_Format(PyExc_ValueError,
                  "client_id needs to be a number from 0 to %d, or None.",
@@ -422,7 +448,7 @@ static PyObject* PyMinqlx_GetCvar(PyObject* self, PyObject* args) {
 
     cvar_t* cvar = Cvar_FindVar(name);
     if (cvar) {
-    	return PyUnicode_FromString(cvar->string);
+        return PyUnicode_FromString(cvar->string);
     }
 
     Py_RETURN_NONE;
@@ -482,26 +508,26 @@ static PyObject* PyMinqlx_Kick(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "iO:kick", &i, &reason))
         return NULL;
 
-	if (i >= 0 && i < sv_maxclients->integer) {
-		if (svs->clients[i].state != CS_ACTIVE) {
-			PyErr_Format(PyExc_ValueError,
-					"client_id must be None or the ID of an active player.");
-			return NULL;
-		}
-		else if (reason == Py_None || (PyUnicode_Check(reason) && PyUnicode_AsUTF8(reason)[0] == 0)) {
-			// Default kick message for None or empty strings.
-			My_SV_DropClient(&svs->clients[i], "was kicked.");
-		}
-		else if (PyUnicode_Check(reason)) {
-			My_SV_DropClient(&svs->clients[i], PyUnicode_AsUTF8(reason));
-		}
-	}
-	else {
-		PyErr_Format(PyExc_ValueError,
-				"client_id needs to be a number from 0 to %d, or None.",
-				sv_maxclients->integer);
-		return NULL;
-	}
+    if (i >= 0 && i < sv_maxclients->integer) {
+        if (svs->clients[i].state != CS_ACTIVE) {
+            PyErr_Format(PyExc_ValueError,
+                    "client_id must be None or the ID of an active player.");
+            return NULL;
+        }
+        else if (reason == Py_None || (PyUnicode_Check(reason) && PyUnicode_AsUTF8(reason)[0] == 0)) {
+            // Default kick message for None or empty strings.
+            My_SV_DropClient(&svs->clients[i], "was kicked.");
+        }
+        else if (PyUnicode_Check(reason)) {
+            My_SV_DropClient(&svs->clients[i], PyUnicode_AsUTF8(reason));
+        }
+    }
+    else {
+        PyErr_Format(PyExc_ValueError,
+                "client_id needs to be a number from 0 to %d, or None.",
+                sv_maxclients->integer);
+        return NULL;
+    }
 
     Py_RETURN_NONE;
 }
@@ -534,11 +560,11 @@ static PyObject* PyMinqlx_GetConfigstring(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "i:get_configstring", &i))
         return NULL;
     else if (i < 0 || i > MAX_CONFIGSTRINGS) {
-		PyErr_Format(PyExc_ValueError,
-						 "index needs to be a number from 0 to %d.",
-						 MAX_CONFIGSTRINGS);
-		return NULL;
-	}
+        PyErr_Format(PyExc_ValueError,
+                         "index needs to be a number from 0 to %d.",
+                         MAX_CONFIGSTRINGS);
+        return NULL;
+    }
 
     SV_GetConfigstring(i, csbuffer, sizeof(csbuffer));
     return PyUnicode_DecodeUTF8(csbuffer, strlen(csbuffer), "ignore");
@@ -556,10 +582,10 @@ static PyObject* PyMinqlx_SetConfigstring(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "is:set_configstring", &i, &cs))
         return NULL;
     else if (i < 0 || i > MAX_CONFIGSTRINGS) {
-    	PyErr_Format(PyExc_ValueError,
-    	                 "index needs to be a number from 0 to %d.",
-						 MAX_CONFIGSTRINGS);
-		return NULL;
+        PyErr_Format(PyExc_ValueError,
+                         "index needs to be a number from 0 to %d.",
+                         MAX_CONFIGSTRINGS);
+        return NULL;
     }
 
     My_SV_SetConfigstring(i, cs);
@@ -574,24 +600,24 @@ static PyObject* PyMinqlx_SetConfigstring(PyObject* self, PyObject* args) {
 */
 
 static PyObject* PyMinqlx_ForceVote(PyObject* self, PyObject* args) {
-	int pass;
+    int pass;
     if (!PyArg_ParseTuple(args, "p:force_vote", &pass))
         return NULL;
 
     if (!level->voteTime) {
-    	// No active vote.
-    	Py_RETURN_FALSE;
+        // No active vote.
+        Py_RETURN_FALSE;
     }
     else if (pass && level->voteTime) {
-    	// We tell the server every single client voted yes, making it pass in the next G_RunFrame.
-		for (int i = 0; i < sv_maxclients->integer; i++) {
-			if (svs->clients[i].state == CS_ACTIVE)
-				g_entities[i].client->pers.voteState = VOTE_YES;
-		}
+        // We tell the server every single client voted yes, making it pass in the next G_RunFrame.
+        for (int i = 0; i < sv_maxclients->integer; i++) {
+            if (svs->clients[i].state == CS_ACTIVE)
+                g_entities[i].client->pers.voteState = VOTE_YES;
+        }
     }
     else if (!pass && level->voteTime) {
-    	// If we tell the server the vote is over, it'll fail it right away.
-		level->voteTime -= 30000;
+        // If we tell the server the vote is over, it'll fail it right away.
+        level->voteTime -= 30000;
     }
 
     Py_RETURN_TRUE;
@@ -624,29 +650,29 @@ static PyObject* PyMinqlx_RegisterHandler(PyObject* self, PyObject* args) {
     PyObject* new_handler;
 
     if (!PyArg_ParseTuple(args, "sO:register_handler", &event, &new_handler)) {
-    	return NULL;
+        return NULL;
     }
     else if (new_handler != Py_None && !PyCallable_Check(new_handler)) {
-		PyErr_SetString(PyExc_TypeError, "The handler must be callable.");
-		return NULL;
-	}
+        PyErr_SetString(PyExc_TypeError, "The handler must be callable.");
+        return NULL;
+    }
 
-	for (handler_t* h = handlers; h->name; h++) {
-		if (!strcmp(h->name, event)) {
-			Py_XDECREF(*h->handler);
-			if (new_handler == Py_None)
-				*h->handler = NULL;
-			else {
-				*h->handler = new_handler;
-				Py_INCREF(new_handler);
-			}
+    for (handler_t* h = handlers; h->name; h++) {
+        if (!strcmp(h->name, event)) {
+            Py_XDECREF(*h->handler);
+            if (new_handler == Py_None)
+                *h->handler = NULL;
+            else {
+                *h->handler = new_handler;
+                Py_INCREF(new_handler);
+            }
 
-			Py_RETURN_NONE;
-		}
-	}
+            Py_RETURN_NONE;
+        }
+    }
 
-	PyErr_SetString(PyExc_ValueError, "Invalid event.");
-	return NULL;
+    PyErr_SetString(PyExc_ValueError, "Invalid event.");
+    return NULL;
 }
 
 /*
@@ -998,7 +1024,7 @@ static PyObject* PyMinqlx_SetWeapon(PyObject* self, PyObject* args) {
     }
     else if (!g_entities[client_id].client)
         Py_RETURN_FALSE;
-    else if (weapon < 0 || weapon >= MAX_WEAPONS) {
+    else if (weapon < 0 || weapon > 16) {
         PyErr_Format(PyExc_ValueError, "Weapon must be a number from 0 to 15.");
         return NULL;
     }
@@ -1500,13 +1526,8 @@ void replace_item_core(gentity_t* ent, int item_id) {
 static PyObject* PyMinqlx_ReplaceItems(PyObject* self, PyObject* args) {
     PyObject *arg1, *arg2 ;
     int entity_id = 0, item_id = 0;
-    #if PY_VERSION_HEX < ((3 << 24) | (7 << 16))
-    char *entity_classname = NULL, *item_classname = NULL;
-    #else
     const char *entity_classname = NULL, *item_classname = NULL;
-    #endif
     gentity_t* ent;
-
 
     if (!PyArg_ParseTuple(args, "OO:replace_items", &arg1, &arg2))
         return NULL;
@@ -1653,16 +1674,16 @@ static PyObject* PyMinqlx_DevPrintItems(PyObject* self, PyObject* args) {
 */
 
 static PyObject* PyMinqlx_ForceWeaponRespawnTime(PyObject* self, PyObject* args) {
-	int respawn_time;
+    int respawn_time;
     gentity_t* ent;
-	
-	if (!PyArg_ParseTuple(args, "i:force_weapon_respawn_time", &respawn_time))
-		return NULL;
-	
-	if (respawn_time < 0) {    
+    
+    if (!PyArg_ParseTuple(args, "i:force_weapon_respawn_time", &respawn_time))
+        return NULL;
+    
+    if (respawn_time < 0) {    
         PyErr_Format(PyExc_ValueError, "respawn time needs to be an integer 0 or greater");
         return NULL;
-    }	
+    }   
 
     for (int i=0; i<MAX_GENTITIES; i++) {
         ent = &g_entities[i];
@@ -1670,13 +1691,13 @@ static PyObject* PyMinqlx_ForceWeaponRespawnTime(PyObject* self, PyObject* args)
         if (!ent->inuse)
             continue;
 
-		if (ent->s.eType != ET_ITEM || ent->item == NULL)
-            continue;		
-		
-		if (ent->item->giType != IT_WEAPON)
-			continue;
-				
-		ent->wait = respawn_time;
+        if (ent->s.eType != ET_ITEM || ent->item == NULL)
+            continue;       
+        
+        if (ent->item->giType != IT_WEAPON)
+            continue;
+                
+        ent->wait = respawn_time;
     }
 
     Py_RETURN_TRUE;
@@ -1691,34 +1712,34 @@ static PyObject* PyMinqlx_ForceWeaponRespawnTime(PyObject* self, PyObject* args)
 static PyMethodDef minqlxMethods[] = {
     {"player_info", PyMinqlx_PlayerInfo, METH_VARARGS,
      "Returns a dictionary with information about a player by ID."},
-	{"players_info", PyMinqlx_PlayersInfo, METH_NOARGS,
-	 "Returns a list with dictionaries with information about all the players on the server."},
-	{"get_userinfo", PyMinqlx_GetUserinfo, METH_VARARGS,
-	 "Returns a string with a player's userinfo."},
+    {"players_info", PyMinqlx_PlayersInfo, METH_NOARGS,
+     "Returns a list with dictionaries with information about all the players on the server."},
+    {"get_userinfo", PyMinqlx_GetUserinfo, METH_VARARGS,
+     "Returns a string with a player's userinfo."},
     {"send_server_command", PyMinqlx_SendServerCommand, METH_VARARGS,
      "Sends a server command to either one specific client or all the clients."},
-	{"client_command", PyMinqlx_ClientCommand, METH_VARARGS,
-	 "Tells the server to process a command from a specific client."},
-	{"console_command", PyMinqlx_ConsoleCommand, METH_VARARGS,
-	 "Executes a command as if it was executed from the server console."},
-	{"get_cvar", PyMinqlx_GetCvar, METH_VARARGS,
-	 "Gets a cvar."},
-	{"set_cvar", PyMinqlx_SetCvar, METH_VARARGS,
-	 "Sets a cvar."},
+    {"client_command", PyMinqlx_ClientCommand, METH_VARARGS,
+     "Tells the server to process a command from a specific client."},
+    {"console_command", PyMinqlx_ConsoleCommand, METH_VARARGS,
+     "Executes a command as if it was executed from the server console."},
+    {"get_cvar", PyMinqlx_GetCvar, METH_VARARGS,
+     "Gets a cvar."},
+    {"set_cvar", PyMinqlx_SetCvar, METH_VARARGS,
+     "Sets a cvar."},
     {"set_cvar_limit", PyMinqlx_SetCvarLimit, METH_VARARGS,
      "Sets a non-string cvar with a minimum and maximum value."},
-	{"kick", PyMinqlx_Kick, METH_VARARGS,
-	 "Kick a player and allowing the admin to supply a reason for it."},
-	{"console_print", PyMinqlx_ConsolePrint, METH_VARARGS,
-	 "Prints text on the console. If used during an RCON command, it will be printed in the player's console."},
-	{"get_configstring", PyMinqlx_GetConfigstring, METH_VARARGS,
-	 "Get a configstring."},
-	{"set_configstring", PyMinqlx_SetConfigstring, METH_VARARGS,
-	 "Sets a configstring and sends it to all the players on the server."},
-	{"force_vote", PyMinqlx_ForceVote, METH_VARARGS,
-	 "Forces the current vote to either fail or pass."},
-	{"add_console_command", PyMinqlx_AddConsoleCommand, METH_VARARGS,
-	 "Adds a console command that will be handled by Python code."},
+    {"kick", PyMinqlx_Kick, METH_VARARGS,
+     "Kick a player and allowing the admin to supply a reason for it."},
+    {"console_print", PyMinqlx_ConsolePrint, METH_VARARGS,
+     "Prints text on the console. If used during an RCON command, it will be printed in the player's console."},
+    {"get_configstring", PyMinqlx_GetConfigstring, METH_VARARGS,
+     "Get a configstring."},
+    {"set_configstring", PyMinqlx_SetConfigstring, METH_VARARGS,
+     "Sets a configstring and sends it to all the players on the server."},
+    {"force_vote", PyMinqlx_ForceVote, METH_VARARGS,
+     "Forces the current vote to either fail or pass."},
+    {"add_console_command", PyMinqlx_AddConsoleCommand, METH_VARARGS,
+     "Adds a console command that will be handled by Python code."},
     {"register_handler", PyMinqlx_RegisterHandler, METH_VARARGS,
      "Register an event handler. Can be called more than once per event, but only the last one will work."},
     {"player_state", PyMinqlx_PlayerState, METH_VARARGS,
@@ -1783,7 +1804,7 @@ static PyModuleDef minqlxModule = {
     NULL, NULL, NULL, NULL
 };
 
-static PyObject* PyMinqlx_InitModule(void) {
+__declspec(dllexport) PyObject* __cdecl PyMinqlx_InitModule(void) { // win32
     PyObject* module = PyModule_Create(&minqlxModule);
 
     // Set minqlx version.
@@ -1910,55 +1931,95 @@ int PyMinqlx_IsInitialized(void) {
 }
 
 PyMinqlx_InitStatus_t PyMinqlx_Initialize(void) {
+
     if (PyMinqlx_IsInitialized()) {
-        DebugPrint("%s was called while already initialized!\n", __func__);
+        DebugPrint("[Main] %s was called while already initialized!\n", __func__);
         return PYM_ALREADY_INITIALIZED;
     }
 
-    DebugPrint("Initializing Python...\n");
-    Py_SetProgramName(PYTHON_FILENAME);
-    PyImport_AppendInittab("_minqlx", &PyMinqlx_InitModule);
-    Py_Initialize();
-    #if PY_VERSION_HEX < ((3 << 24) | (7 << 16))
-    PyEval_InitThreads();
-    #endif
+    DebugPrint("[Main] Initializing Python...\n");
+    PyImport_AppendInittab("_minqlx", (PyObject* (__cdecl *)(void))&PyMinqlx_InitModule ); // win32
+
+    PyConfig config;
+    PyStatus status;
+    PyConfig_InitIsolatedConfig(&config);
+    config.use_environment = 1; // future use, custom py_path, wip
+    status = Py_InitializeFromConfig(&config);
+    PyConfig_Clear(&config);
+
+    char dll_dir[MAX_PATH];
+    GetModuleFileNameA(GetModuleHandleA(WINQLX32_DLL_MODULE), dll_dir, sizeof(dll_dir));
+    char* last_slash = strrchr(dll_dir, '\\');
+    if (last_slash != NULL) *last_slash = '\0';
+
+    // convert to slash
+    for (int i = 0; dll_dir[i] != '\0'; i++) {
+        if (dll_dir[i] == '\\') dll_dir[i] = '/';
+    }
+
+    char full_zip_path[MAX_PATH];
+    sprintf_s(full_zip_path, sizeof(full_zip_path), "%s", dll_dir);
+
+    // Capture the direct pointer to sys.path
+    PyObject* sys_path = PySys_GetObject("path");
+    if (sys_path != NULL && PyList_Check(sys_path)) {
+        // Native Python String object with the absolute path of zip
+        PyObject* p_zip_string = PyUnicode_FromString(full_zip_path);
+
+        if (p_zip_string != NULL) {
+            // Append zip path to sys.path
+            PyList_Append(sys_path, p_zip_string);
+            Py_DECREF(p_zip_string);
+        }
+
+    }
+
+    if (PyStatus_Exception(status)) {
+        DebugPrint("[Main] Py_InitializeFromConfig() failed: %s\n", status.err_msg ? status.err_msg : "unknown error");
+        return PYM_PY_INIT_ERROR;
+    }
 
     // Add the main module.
     PyObject* main_module = PyImport_AddModule("__main__");
     PyObject* main_dict = PyModule_GetDict(main_module);
+    
     // Run script to load pyminqlx.
     PyObject* res = PyRun_String(loader, Py_file_input, main_dict, main_dict);
+
     if (res == NULL) {
-		DebugPrint("PyRun_String() returned NULL. Did you modify the loader?\n");
-		return PYM_MAIN_SCRIPT_ERROR;
-	}
+        DebugPrint("[Main] PyRun_String() returned NULL. Did you modify the loader?\n");
+        return PYM_MAIN_SCRIPT_ERROR;
+    }
+
     PyObject* ret = PyDict_GetItemString(main_dict, "ret");
-    Py_XDECREF(ret);
+
     Py_DECREF(res);
+
     if (ret == NULL) {
-		DebugPrint("The loader script return value doesn't exist?\n");
-		return PYM_MAIN_SCRIPT_ERROR;
-	}
-	else if (ret != Py_True) {
-		// No need to print anything, since the traceback should be printed already.
-		return PYM_MAIN_SCRIPT_ERROR;
-	}
+        DebugPrint("[Main] The loader script return value doesn't exist?\n");
+        return PYM_MAIN_SCRIPT_ERROR;
+    }
+
+    else if (ret != Py_True) {
+        // No need to print anything, since the traceback should be printed already.
+        return PYM_MAIN_SCRIPT_ERROR;
+    }
 
     mainstate = PyEval_SaveThread();
     initialized = 1;
-    DebugPrint("Python initialized!\n");
+    DebugPrint("[Main] Python initialized!\n");
     return PYM_SUCCESS;
 }
 
 PyMinqlx_InitStatus_t PyMinqlx_Finalize(void) {
     if (!PyMinqlx_IsInitialized()) {
-        DebugPrint("%s was called before being initialized!\n", __func__);
+        DebugPrint("[Main] %s was called before being initialized!\n", __func__);
         return PYM_NOT_INITIALIZED_ERROR;
     }
 
     for (handler_t* h = handlers; h->name; h++) {
-		*h->handler = NULL;
-	}
+        *h->handler = NULL;
+    }
 
     PyEval_RestoreThread(mainstate);
     Py_Finalize();

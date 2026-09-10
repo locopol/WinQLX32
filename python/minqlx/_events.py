@@ -127,8 +127,8 @@ class EventDispatcher:
         if not (minqlx.PRI_HIGHEST <= priority <= minqlx.PRI_LOWEST):
             raise ValueError("'{}' is an invalid priority level.".format(priority))
 
-        if self.need_zmq_stats_enabled and not bool(int(minqlx.get_cvar("zmq_stats_enable"))):
-            raise AssertionError("{} hook requires zmq_stats_enabled cvar to have nonzero value".format(self.name))
+        '''if self.need_zmq_stats_enabled and not bool(int(minqlx.get_cvar("zmq_stats_enable"))):
+            raise AssertionError("{} hook requires zmq_stats_enabled cvar to have nonzero value".format(self.name))''' #WORKAROUND: Pending by Python embed
 
         if plugin not in self.plugins:
             # Initialize tuple.
@@ -269,6 +269,7 @@ class ServerCommandDispatcher(EventDispatcher):
     name = "server_command"
 
     def dispatch(self, player, cmd):
+        logger = minqlx.get_logger()
         return super().dispatch(player, cmd)
 
     def handle_return(self, handler, value):
@@ -277,10 +278,12 @@ class ServerCommandDispatcher(EventDispatcher):
 
         """
         if isinstance(value, str):
+            logger = minqlx.get_logger()
             player, cmd = self.args
             self.args = (player, value)
             self.return_value = value
         else:
+            logger = minqlx.get_logger()
             return super().handle_return(handler, value)
 
 class FrameEventDispatcher(EventDispatcher):

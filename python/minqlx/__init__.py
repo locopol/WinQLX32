@@ -19,4 +19,4 @@ from ._events import *
 from ._commands import *
 from ._handlers import *
 from ._player import *
-from ._zmq import *
+#from ._zmq import * # Limited by Python embed, WIP.

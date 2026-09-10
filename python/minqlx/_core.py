@@ -116,7 +116,6 @@ def _configure_logger():
     logger = logging.getLogger("minqlx")
     logger.setLevel(logging.DEBUG)
 
-    # File
     file_path = os.path.join(minqlx.get_cvar("fs_homepath"), "minqlx.log")
     maxlogs = minqlx.Plugin.get_cvar("qlx_logs", int)
     maxlogsize = minqlx.Plugin.get_cvar("qlx_logsSize", int)
@@ -131,7 +130,7 @@ def _configure_logger():
     # Console
     console_fmt = logging.Formatter("[%(name)s.%(funcName)s] %(levelname)s: %(message)s", "%H:%M:%S")
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(console_fmt)
     logger.addHandler(console_handler)
 
@@ -155,9 +154,6 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     e = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback)).rstrip("\n")
     for line in e.split("\n"):
         logger.error(line)
-
-def threading_excepthook(args):
-    handle_exception(args.exc_type, args.exc_value, args.exc_traceback)
 
 _init_time = datetime.datetime.now()
 
@@ -197,7 +193,7 @@ def set_cvar_limit_once(name, value, minimum, maximum, flags=0):
     return False
 
 def set_plugins_version(path):
-    args_version = shlex.split("git describe --long --tags --dirty --always")
+    ''' args_version = shlex.split("git describe --long --tags --dirty --always")
     args_branch = shlex.split("git rev-parse --abbrev-ref HEAD")
 
     # We keep environment variables, but remove LD_PRELOAD to avoid a warning the OS might throw.
@@ -223,8 +219,9 @@ def set_plugins_version(path):
         branch = p.stdout.read().decode().strip()
     except (FileNotFoundError, subprocess.TimeoutExpired):
         setattr(minqlx, "__plugins_version__", "NOT_SET")
-        return
-
+        return ''' #WORKAROUND, pending to parse version in windows logic, using latest version and branch from minomino.
+    version = '0.3.7'
+    branch = 'master'
     setattr(minqlx, "__plugins_version__", "{}-{}".format(version, branch))
 
 def set_map_subtitles():
@@ -428,6 +425,7 @@ def initialize_cvars():
 
 def initialize():
     minqlx.register_handlers()
+    logger = get_logger()
 
 def late_init():
     """Initialization that needs to be called after QLDS has finished
@@ -450,9 +448,6 @@ def late_init():
     logger = get_logger()
     # Set our own exception handler so that we can log them if unhandled.
     sys.excepthook = handle_exception
-
-    if sys.version_info >= (3, 8):
-        threading.excepthook = threading_excepthook
 
     # Add the plugins path to PATH so that we can load plugins later.
     sys.path.append(os.path.dirname(plugins_path))

@@ -43,7 +43,6 @@ class Player():
     """
     def __init__(self, client_id, info=None):
         self._valid = True
-
         # Can pass own info for efficiency when getting all players and to allow dummy players.
         if info:
             self._id = client_id

@@ -269,6 +269,7 @@ class Game():
     def workshop_items(self, new_items):
         if hasattr(new_items, "__iter__"):
             minqlx.set_configstring(715, " ".join([str(i) for i in new_items]) + " ")
+            minqlx.set_configstring(714, " ".join([str(i) for i in new_items]) + " ") # WORKAROUND: Send workshop to client, WIP.
         else:
             raise ValueError("The value needs to be an iterable.")
 

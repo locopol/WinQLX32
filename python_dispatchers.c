@@ -1,7 +1,27 @@
-#include <Python.h>
+/*
+Copyright (C) 2015 Mino <mino@minomino.org>
+Copyright (C) 2022-2026 Thomas Jones <me@thomasjones.id.au>
+Copyright (C) 2026 Paul Asalgado <locopol@gmail.com>
 
-#include "pyminqlx.h"
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include <windows.h>
+#include <stdio.h>
+
 #include "quake_common.h"
+#include "winqlx_common.h"
 
 int allow_free_client = -1;
 
@@ -76,125 +96,136 @@ void FrameDispatcher(void) {
 }
 
 char* ClientConnectDispatcher(int client_id, int is_bot) {
-	char* ret = NULL;
+    char* ret = NULL;
     static char connect_buf[4096];
-	if (!client_connect_handler)
-		return ret; // No registered handler.
+    if (!client_connect_handler)
+        return ret; // No registered handler.
 
-	PyGILState_STATE gstate = PyGILState_Ensure();
-
-	// Tell PyMinqlx_PlayerInfo it's OK to get player info for someone with CS_FREE.
-	allow_free_client = client_id;
-	PyObject* result = PyObject_CallFunction(client_connect_handler, "iO", client_id, is_bot ? Py_True : Py_False);
-	allow_free_client = -1;
-
-	if (result == NULL)
-		DebugError("PyObject_CallFunction() returned NULL.\n",
-				__FILE__, __LINE__, __func__);
-	else if (PyBool_Check(result) && result == Py_False)
-		ret = "You are banned from this server.";
-	else if (PyUnicode_Check(result)) {
-		strncpy(connect_buf, PyUnicode_AsUTF8(result), sizeof(connect_buf));
-        ret = connect_buf;
-    }
-
-	Py_XDECREF(result);
-
-	PyGILState_Release(gstate);
-	return ret;
-}
-
-void ClientDisconnectDispatcher(int client_id, const char* reason) {
-	if (!client_disconnect_handler)
-		return; // No registered handler.
-
-	PyGILState_STATE gstate = PyGILState_Ensure();
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
     // Tell PyMinqlx_PlayerInfo it's OK to get player info for someone with CS_FREE.
     allow_free_client = client_id;
-	PyObject* result = PyObject_CallFunction(client_disconnect_handler, "is", client_id, reason);
+    PyObject* result = PyObject_CallFunction(client_connect_handler, "iO", client_id, is_bot ? Py_True : Py_False);
     allow_free_client = -1;
-	
+
     if (result == NULL)
-		DebugError("PyObject_CallFunction() returned NULL.\n",
-				__FILE__, __LINE__, __func__);
+        DebugError("PyObject_CallFunction() returned NULL.\n",
+                __FILE__, __LINE__, __func__);
+    else if (PyBool_Check(result) && result == Py_False)
+        ret = "You are banned from this server.";
+    else if (PyUnicode_Check(result)) {
+        strncpy(connect_buf, PyUnicode_AsUTF8(result), sizeof(connect_buf));
+        ret = connect_buf;
+    }
 
-	Py_XDECREF(result);
+    Py_XDECREF(result);
 
-	PyGILState_Release(gstate);
-	return;
+    PyGILState_Release(gstate);
+    return ret;
+}
+
+void ClientDisconnectDispatcher(int client_id, const char* reason) {
+    if (!client_disconnect_handler)
+        return; // No registered handler.
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    // Tell PyMinqlx_PlayerInfo it's OK to get player info for someone with CS_FREE.
+    allow_free_client = client_id;
+    PyObject* result = PyObject_CallFunction(client_disconnect_handler, "is", client_id, reason);
+    allow_free_client = -1;
+    
+    if (result == NULL)
+        DebugError("PyObject_CallFunction() returned NULL.\n",
+                __FILE__, __LINE__, __func__);
+
+    Py_XDECREF(result);
+
+    PyGILState_Release(gstate);
+    return;
 }
 
 // Does not trigger on bots.
 int ClientLoadedDispatcher(int client_id) {
-	int ret = 1;
-	if (!client_loaded_handler)
-		return ret; // No registered handler.
+    int ret = 1;
+    if (!client_loaded_handler)
+        return ret; // No registered handler.
 
-	PyGILState_STATE gstate = PyGILState_Ensure();
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
-	PyObject* result = PyObject_CallFunction(client_loaded_handler, "i", client_id);
+    PyObject* result = PyObject_CallFunction(client_loaded_handler, "i", client_id);
 
-	// Only change to 0 if we got False returned to us.
-	if (result == NULL) {
-		DebugError("PyObject_CallFunction() returned NULL.\n",
-				__FILE__, __LINE__, __func__);
-		PyGILState_Release(gstate);
-		return ret;
-	}
-	else if (PyBool_Check(result) && result == Py_False) {
-		ret = 0;
-	}
+    // Only change to 0 if we got False returned to us.
+    if (result == NULL) {
+        DebugError("PyObject_CallFunction() returned NULL.\n",
+                __FILE__, __LINE__, __func__);
+        PyGILState_Release(gstate);
+        return ret;
+    }
+    else if (PyBool_Check(result) && result == Py_False) {
+        ret = 0;
+    }
 
-	Py_XDECREF(result);
+    Py_XDECREF(result);
 
-	PyGILState_Release(gstate);
-	return ret;
+    PyGILState_Release(gstate);
+    return ret;
 }
 
 void NewGameDispatcher(int restart) {
-	if (!new_game_handler)
-		return; // No registered handler.
+    if (!new_game_handler)
+        return; // No registered handler.
 
-	PyGILState_STATE gstate = PyGILState_Ensure();
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
-	PyObject* result = PyObject_CallFunction(new_game_handler, "O", restart ? Py_True : Py_False);
+    PyObject* result = PyObject_CallFunction(new_game_handler, "O", restart ? Py_True : Py_False);
 
-	if (result == NULL)
-		DebugError("PyObject_CallFunction() returned NULL.\n", __FILE__, __LINE__, __func__);
+    if (result == NULL)
+        DebugError("PyObject_CallFunction() returned NULL.\n", __FILE__, __LINE__, __func__);
 
-	Py_XDECREF(result);
-
-	PyGILState_Release(gstate);
-	return;
+    Py_XDECREF(result);
+    PyGILState_Release(gstate);
+    return;
 }
 
 char* SetConfigstringDispatcher(int index, char* value) {
-	char* ret = value;
+    char* ret = value;
     static char setcs_buf[4096];
-	if (!set_configstring_handler)
-		return ret; // No registered handler.
+    if (!set_configstring_handler)
+        return ret; // No registered handler.
 
-	PyGILState_STATE gstate = PyGILState_Ensure();
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
+    size_t sizevalue = strlen(ret);
 
     PyObject* value_string = PyUnicode_DecodeUTF8(value, strlen(value), "ignore");
-	PyObject* result = PyObject_CallFunction(set_configstring_handler, "iO", index, value_string);
+    PyObject* result = PyObject_CallFunction(set_configstring_handler, "iO", index, value_string);
 
-	if (result == NULL)
-		DebugError("PyObject_CallFunction() returned NULL.\n",
-				__FILE__, __LINE__, __func__);
-	else if (PyBool_Check(result) && result == Py_False)
-		ret = NULL;
-	else if (PyUnicode_Check(result)) {
-		strncpy(setcs_buf, PyUnicode_AsUTF8(result), sizeof(setcs_buf));
-        ret = setcs_buf;
+    if (result == NULL)
+        DebugError("PyObject_CallFunction() returned NULL.\n",
+                __FILE__, __LINE__, __func__);
+    else if (PyBool_Check(result) && result == Py_False)
+        ret = NULL;
+    else if (PyUnicode_Check(result)) {
+                Py_ssize_t len;
+        const char* s = PyUnicode_AsUTF8AndSize(result, &len);
+        if (s) {
+            if (result == value_string && (size_t)len == sizevalue) {
+                // Returned unchanged and the decode was lossless; the engine's
+                // buffer already holds these exact bytes, so skip the copy.
+                ret = value;
+            } else {
+                    strncpy(setcs_buf, PyUnicode_AsUTF8(result), sizeof(setcs_buf));
+                    ret = setcs_buf;
+            }
+        }
     }
 
     Py_XDECREF(value_string);
-	Py_XDECREF(result);
+    Py_XDECREF(result);
 
-	PyGILState_Release(gstate);
-	return ret;
+    PyGILState_Release(gstate);
+    return ret;
 }
 
 void RconDispatcher(const char* cmd) {

@@ -1,5 +1,5 @@
 # minqlx - Extends Quake Live's dedicated server with extra functionality and scripting.
-# Copyright (C) 2015 Mino <mino@minomino.org>
+# Copyright (C) 2026 Paul Asalgado <locopol@gmail.com>
 
 # This file is part of minqlx.
 
@@ -16,8 +16,10 @@
 # You should have received a copy of the GNU General Public License
 # along with minqlx. If not, see <http://www.gnu.org/licenses/>.
 
+import os
+import shelve
+import threading
 import minqlx
-import redis
 
 # ====================================================================
 #                          AbstractDatabase
@@ -107,48 +109,377 @@ class AbstractDatabase:
         """
         raise NotImplementedError("The base plugin can't do database actions.")
 
-# ====================================================================
-#                               Redis
-# ====================================================================
-
 class Redis(AbstractDatabase):
-    """A subclass of :class:`minqlx.AbstractDatabase` providing support for Redis."""
+    """
+    Symmetric abstraction class that emulates Redis using 
+    Python's native persistent shelve Embed engine.
+    """
+    def __init__(self, filename="minqlx_db.dir"):
+        # isolate threading lock
+        self.lock = threading.Lock()
+        
+        # Relative path of game instance (multiple servers?, WIP)
+        #os.path.join(minqlx.get_cvar("fs_homepath"))
+        base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # We only use the instance-level ones if we override the URI from the config.
-    _conn = None
-    _pool = None
-    _pass = ""
+        # We backtrack if we are inside minqlx.zip or the subfolder
+        if ".zip" in base_dir.lower() or "minqlx" in base_dir.lower():
+            base_dir = "."
+            
+        self.db_path = os.path.join(base_dir, "minqlx_data")
+        
+        # Initialize storage container on disk
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                if "_keys_master" not in db:
+                    db["_keys_master"] = {}
 
-    def __del__(self):
-        super().__del__()
-        self.close()
+    # Redis compatible commands (strings)
+    
+    def get(self, key):
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                master = db.get("_keys_master", {})
+                return master.get(str(key), None)
 
-    def __contains__(self, key):
-        return self.r.exists(key)
+    def set(self, key, value):
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                master = db["_keys_master"]
+                master[str(key)] = str(value)
+                db["_keys_master"] = master
+        return True
 
-    def __getitem__(self, key):
-        res = self.r.get(key)
-        if res is None:
-            raise KeyError("The key '{}' is not present in the database.".format(key))
-        else:
-            return res
+    def exists(self, key):
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                master = db.get("_keys_master", {})
+                return str(key) in master
 
-    def __setitem__(self, key, item):
-        res = self.r.set(key, item)
-        if res is False:
-            raise RuntimeError("The database assignment failed.")
+    def delete(self, *keys):
+        count = 0
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                master = db["_keys_master"]
+                for key in keys:
+                    str_key = str(key)
+                    if str_key in master:
+                        del master[str_key]
+                        count += 1
+                    # If it also happens to be a composite hash, we clean the root table.
+                    if str_key in db:
+                        del db[str_key]
+                db["_keys_master"] = master
+        return count
+
+    def lpush(self, key, *values):
+        """
+        Insert one or more elements on db.
+        Simula con precisión el comando LPUSH de Redis.
+        """
+        str_key = str(key)
+        
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                # initialize if not exists
+                if str_key not in db:
+                    db[str_key] = []
+                
+                # force list
+                current_list = list(db[str_key])
+                
+                #inserts in reverse order if multiple arguments are passed, so that the last value is at absolute index 0.
+                for value in values:
+                    current_list.insert(0, str(value))
+                
+                # write changes
+                db[str_key] = current_list
+                
+                # Return length of list
+                return len(current_list)
+
+    def incr(self, key):
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                master = db["_keys_master"]
+                str_key = str(key)
+                current = int(master.get(str_key, 0))
+                current += 1
+                master[str_key] = str(current)
+                db["_keys_master"] = master
+                return current
+
+    # Redis compatible commands (hashes)
+
+    def hmset(self, key, mapping):
+        str_key = str(key)
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                db[str_key] = dict(mapping)
+        return True
+    
+    def hset(self, name, key, value):
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                str_name = str(name)
+                str_key = str(key)
+                if str_name not in db:
+                    db[str_name] = {}
+                hash_map = db[str_name]
+                hash_map[str_key] = str(value)
+                db[str_name] = hash_map
+        return True
+
+    def hget(self, name, key):
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                str_name = str(name)
+                if str_name not in db:
+                    return None
+                return db[str_name].get(str(key), None)
+
+    def hgetall(self, name):
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                str_name = str(name)
+                if str_name not in db:
+                    return {}
+                # Returns a clean copy of the internal dictionary in RAMs
+                return dict(db[str_name])
+
+    def hdel(self, name, *keys):
+        count = 0
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                str_name = str(name)
+                if str_name in db:
+                    hash_map = db[str_name]
+                    for key in keys:
+                        str_key = str(key)
+                        if str_key in hash_map:
+                            del hash_map[str_key]
+                            count += 1
+                    db[str_name] = hash_map
+        return count
+
+    def hkeys(self, name):
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                str_name = str(name)
+                if str_name not in db:
+                    return []
+                return list(db[str_name].keys())
+
+    def hlen(self, name):
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                str_name = str(name)
+                if str_name not in db:
+                    return 0
+                return len(db[str_name])
+
+    def hexists(self, name, key):
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                str_name = str(name)
+                if str_name not in db:
+                    return False
+                return str(key) in db[str_name]
+
+    # Redis compatible commands (Sorted Sets)
+
+    def zcard(self, key):
+        str_key = str(key)
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                if str_key not in db: return 0
+                return len(db[str_key])
+
+    def zadd(self, key, *args):
+        """Map operator supporting both old (score, member) and modern {member: score} syntax"""
+        str_key = str(key)
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                if str_key not in db:
+                    db[str_key] = {}
+                sorted_set = db[str_key]
+
+                #Analize argument variant according of ban.py
+                if len(args) == 1 and isinstance(args[0], dict):
+                    for member, score in args[0].items():
+                        sorted_set[str(member)] = float(score)
+                elif len(args) >= 2:
+                    # classic format zadd(key, score, member)
+                    score = args[0]
+                    member = args[1]
+                    sorted_set[str(member)] = float(score)
+
+                db[str_key] = sorted_set
+        return 1
+
+    def zrangebyscore(self, key, min_score, max_score, withscores=False):
+        """Emulates timestamp filter search for expired bans"""
+        str_key = str(key)
+        results = []
+        
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                if str_key not in db: return []
+                sorted_set = db[str_key]
+                
+                # pass "+inf" from the original script
+                float_max = float('inf') if max_score == "+inf" else float(max_score)
+                float_min = float(min_score)
+
+                for member, score in sorted_set.items():
+                    if float_min <= score <= float_max:
+                        results.append((member, score) if withscores else member)
+                
+                # sort by the score (expiration timestamp)
+                results.sort(key=lambda x: x[1] if withscores else sorted_set[x])
+                return results
+
+    def zincrby(self, key, amount, value):
+        """Emulates incremental amount of value"""
+        str_key = str(key)
+        str_val = str(value)
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                if str_key in db:
+                    sorted_set = db[str_key]
+                    if str_val in sorted_set:
+                        sorted_set[str_val] += float(amount)
+                        db[str_key] = sorted_set
+        return 1
+
+    # Compatibility Operators 
+    
+    def keys(self, pattern="*"):
+        """
+        Transform simple Redis-style patterns (e.g., "player:*") into Python filters
+        """
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                master = db.get("_keys_master", {})
+                all_keys = list(master.keys()) + [k for k in db.keys() if k != "_keys_master"]
+                
+                clean_pattern = pattern.replace("*", "")
+                if pattern == "*":
+                    return all_keys
+                return [k for k in all_keys if clean_pattern in k]
 
     def __delitem__(self, key):
-        res = self.r.delete(key)
+        str_key = str(key)
+        res = self.delete(str_key)
         if res == 0:
             raise KeyError("The key '{}' is not present in the database.".format(key))
 
-    def __getattr__(self, attr):
-        return getattr(self.r, attr)
+    def __getitem__(self, key):
+        """
+        Maps the reading by brackets to self.db[key].
+        Symmetrical logic of .get() method but throwing KeyError if it doesn't exist,
+        satisfying the original try/except block of motd.py plugin.
+        """
+        str_key = str(key)
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                master = db.get("_keys_master", {})
+                if str_key not in master:
+                    raise KeyError(str_key)
+                return master[str_key]
 
-    @property
-    def r(self):
-        return self.connect()
+    def __setitem__(self, key, value):
+        """
+        Map the write to square brackets: like self.db[key] = value.
+        Transparently redirect the string to the central store.
+        """
+        self.set(key, value)
+
+    def __contains__(self, key):
+        """
+        Map the membership operator: if key in self.db:
+        """
+        return self.exists(key)
+
+    def sadd(self, key, *members):
+        """
+        Adds members to a persistent set indivisibly like Redis operator
+        """
+        str_key = str(key)
+        added_count = 0
+        
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                # If the key does not exist in storage, we initialize a clean Python set.
+                if str_key not in db:
+                    db[str_key] = set()
+                
+                # Extract set from RAM
+                current_set = db[str_key]
+                
+                # We ensure it's a set-type object.
+                if not isinstance(current_set, set):
+                    current_set = set(current_set) if isinstance(current_set, (list, tuple)) else set()
+
+                for member in members:
+                    str_member = str(member)
+                    if str_member not in current_set:
+                        current_set.add(str_member)
+                        added_count += 1
+                
+                # Reinject the mutated set into storage.
+                db[str_key] = current_set
+                
+        return added_count
+
+    def sismember(self, key, member):
+        """
+        Checks if a member belongs to the set.
+        """
+        str_key = str(key)
+        str_member = str(member)
+        
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                if str_key not in db:
+                    return 0
+                current_set = db[str_key]
+                return 1 if str_member in current_set else 0
+
+    def smembers(self, key):
+        """
+        Returns all elements of the set.
+        Returns a list of strings to maintain symmetry with the original operator.
+        """
+        str_key = str(key)
+        
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                if str_key not in db:
+                    return []
+                current_set = db[str_key]
+                return list(current_set)
+
+    def srem(self, key, *members):
+        """
+        Remove members from the set, used by clearmotd o removemotd.
+        """
+        str_key = str(key)
+        removed_count = 0
+        
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                if str_key in db:
+                    current_set = db[str_key]
+                    for member in members:
+                        str_member = str(member)
+                        if str_member in current_set:
+                            current_set.remove(str_member)
+                            removed_count += 1
+                    db[str_key] = current_set
+        return removed_count
+    
+    # minqlx legacy functions
 
     def set_permission(self, player, level):
         """Sets the permission of a player.
@@ -162,7 +493,16 @@ class Redis(AbstractDatabase):
         else:
             key = "minqlx:players:{}:permission".format(player)
 
-        self[key] = level
+        str_level = str(int(level))
+
+        # Protect file isolation against concurrent access from network hooks
+        with self.lock:
+            with shelve.open(self.db_path, writeback=True) as db:
+                db[key] = str_level
+                
+                if "_keys_master" not in db:
+                    db["_keys_master"] = {}
+                db["_keys_master"][key] = str_level
 
     def get_permission(self, player):
         """Gets the permission of a player.
@@ -186,12 +526,20 @@ class Redis(AbstractDatabase):
             return 5
 
         key = "minqlx:players:{}:permission".format(steam_id)
-        try:
-            perm = self[key]
-        except KeyError:
-            perm = "0"
+        perm = "0"
 
-        return int(perm)
+        # Protect file isolation against concurrent access from network hooks
+        with self.lock:
+            with shelve.open(self.db_path) as db:
+                if key in db:
+                    perm = db[key]
+                elif "_keys_master" in db and key in db["_keys_master"]:
+                    perm = db["_keys_master"][key]
+
+        try:
+            return int(perm)
+        except (ValueError, TypeError):
+            return 0
 
     def has_permission(self, player, level=5):
         """Checks if the player has higher than or equal to *level*.
@@ -204,24 +552,6 @@ class Redis(AbstractDatabase):
 
         """
         return self.get_permission(player) >= level
-
-    def set_flag(self, player, flag, value=True):
-        """Sets specified player flag
-
-        :param player: The player in question.
-        :type player: minqlx.Player
-        :param flag: The flag to set.
-        :type flag: string
-        :param value: (optional, default=True) Value to set
-        :type value: bool
-
-        """
-        if isinstance(player, minqlx.Player):
-            key = "minqlx:players:{0}:flags:{1}".format(player.steam_id, flag)
-        else:
-            key = "minqlx:players:{0}:flags:{1}".format(player, flag)
-
-        self[key] = 1 if value else 0
 
     def get_flag(self, player, flag, default=False):
         """Clears the specified player flag
@@ -238,78 +568,82 @@ class Redis(AbstractDatabase):
             key = "minqlx:players:{0}:flags:{1}".format(player.steam_id, flag)
         else:
             key = "minqlx:players:{0}:flags:{1}".format(player, flag)
-
+        
         try:
             return bool(int(self[key]))
         except KeyError:
             return default
 
-    def connect(self, host=None, database=0, unix_socket=False, password=None):
-        """Returns a connection to a Redis database. If *host* is None, it will
-        fall back to the settings in the config and ignore the rest of the arguments.
-        It will also share the connection across any plugins using the default
-        configuration. Passing *host* will make it connect to a specific database
-        that is not shared at all. Subsequent calls to this will return the connection
-        initialized the first call unless it has been closed.
+    def set_flag(self, player, flag, value=True):
+        """Sets specified player flag
 
-        :param host: The host name. If no port is specified, it will use 6379. Ex.: ``localhost:1234``.
-        :type host: str
-        :param database: The database number that should be used.
-        :type database: int
-        :param unix_socket: Whether or not *host* should be interpreted as a unix socket path.
-        :type unix_socket: bool
-        :raises: RuntimeError
+        :param player: The player in question.
+        :type player: minqlx.Player
+        :param flag: The flag to set.
+        :type flag: string
+        :param value: (optional, default=True) Value to set
+        :type value: bool
 
         """
-        if not host and not self._conn: # Resort to default settings in config?
-            if not Redis._conn:
-                cvar_host = minqlx.get_cvar("qlx_redisAddress")
-                cvar_db = int(minqlx.get_cvar("qlx_redisDatabase"))
-                cvar_unixsocket = bool(int(minqlx.get_cvar("qlx_redisUnixSocket")))
-                Redis._pass = minqlx.get_cvar("qlx_redisPassword")
-                if cvar_unixsocket:
-                    Redis._conn = redis.StrictRedis(unix_socket_path=cvar_host,
-                        db=cvar_db, password=Redis._pass, decode_responses=True)
-                else:
-                    split_host = cvar_host.split(":")
-                    if len(split_host) > 1:
-                        port = int(split_host[1])
-                    else:
-                        port = 6379 # Default port.
-                    Redis._pool = redis.ConnectionPool(host=split_host[0],
-                        port=port, db=cvar_db, password=Redis._pass, decode_responses=True)
-                    Redis._conn = redis.StrictRedis(connection_pool=Redis._pool, decode_responses=True)
-                    # TODO: Why does self._conn get set when doing Redis._conn?
-                    self._conn = None
-            return Redis._conn
-        elif not self._conn:
-            split_host = host.split(":")
-            if len(split_host) > 1:
-                port = int(split_host[1])
-            else:
-                port = 6379 # Default port.
+        if isinstance(player, minqlx.Player):
+            key = "minqlx:players:{0}:flags:{1}".format(player.steam_id, flag)
+        else:
+            key = "minqlx:players:{0}:flags:{1}".format(player, flag)
+        
+        # __setitem__ Redis like
+        self[key] = "1" if value else "0"
 
-            if unix_socket:
-                self._conn = redis.StrictRedis(unix_socket_path=host, db=database, password=password, decode_responses=True)
-            else:
-                self._pool = redis.ConnectionPool(host=split_host[0], port=port, db=database, password=password, decode_responses=True)
-                self._conn = redis.StrictRedis(connection_pool=self._pool, decode_responses=True)
-        return self._conn
+    def pipeline(self):
+        """Return simulated instance of Redis"""
+        return ShelvePipeline(self)
+        
+class ShelvePipeline:
+    """
+    A mirror class that emulates a Redis Pipeline.
+    It stores commands in a queue and executes them atomically on disk.
+    This is a list commands identified in minqlx core python routines.
+    """
+    def __init__(self, db_instance):
+        self.db = db_instance
+        self.queue = []
+    def sadd(self, key, *members):
+        self.queue.append(('sadd', (key, *members)))
+        return self
 
+    def set(self, key, value):
+        self.queue.append(('set', (key, value)))
+        return self        
 
-    def close(self):
-        """Close the Redis connection if the config was overridden. Otherwise only do so
-        if this is the last plugin using the default connection.
+    def incr(self, key):
+        self.queue.append(('incr', (key,)))
+        return self
 
-        """
-        if self._conn:
-            self._conn = None
-            if self._pool:
-                self._pool.disconnect()
-                self._pool = None
+    def zadd(self, key, *args):
+        self.queue.append(('zadd', (key, *args)))
+        return self
 
-        if Redis._counter <= 1 and Redis._conn:
-            Redis._conn = None
-            if Redis._pool:
-                Redis._pool.disconnect()
-                Redis._pool = None
+    def hmset(self, key, mapping):
+        self.queue.append(('hmset', (key, mapping)))
+        return self
+
+    def zincrby(self, key, amount, value):
+        self.queue.append(('zincrby', (key, amount, value)))
+        return self
+
+    def lpush(self, key, *values):
+        self.queue.append(('lpush', (key, *values)))
+        return self
+
+    def execute(self):
+        # We dispatch all accumulated commands under a single lock
+        results = []
+        for cmd, args in self.queue:
+            method = getattr(self.db, cmd)
+            results.append(method(*args))
+        self.queue = []
+        return results
+
+# Minqlx init 
+class Database(Redis):
+    def __init__(self):
+        super().__init__()
