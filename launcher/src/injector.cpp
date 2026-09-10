@@ -8,6 +8,7 @@
  * 
  * @param processId The PID of the target process.
  * @param dllPath The full path to the DLL to be injected.
+ * @param pythonEnvPath path of python Dll embed environment.
  * @return true if injection was successful, false otherwise.
  */
 bool Injector::InjectDLL(DWORD processId, const std::string& dllPath, const std::string& pythonEnvPath) {
@@ -20,9 +21,9 @@ bool Injector::InjectDLL(DWORD processId, const std::string& dllPath, const std:
     void* addr_SetDllDirectoryA = (void*)GetProcAddress(GetModuleHandleA("kernel32.dll"), "SetDllDirectoryA");
     void* addr_LoadLibraryA     = (void*)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
 
-    // ------------------------------------------------------------------------
+    // ----------------------------------------------------------------
     // STEP A: FORCE SETDLLDIRECTORY IN THE REMOTE PROCESS (IAT Bypass)
-    // ------------------------------------------------------------------------
+    // ----------------------------------------------------------------
     void* remoteMemPython = VirtualAllocEx(hProcess, NULL, pythonEnvPath.length() + 1, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (remoteMemPython == NULL) {
         CloseHandle(hProcess);
@@ -41,9 +42,9 @@ bool Injector::InjectDLL(DWORD processId, const std::string& dllPath, const std:
     CloseHandle(hThreadRuta);
     VirtualFreeEx(hProcess, remoteMemPython, 0, MEM_RELEASE);
 
-    // ------------------------------------------------------------------------
-    // PASO B: INYECCIÓN MAESTRA DE HOOKS.DLL (WINDOWS YA SABE DÓNDE ESTÁ PYTHON)
-    // ------------------------------------------------------------------------
+    // -------------------------------------------------------------------
+    // STEP B: HOOKS.DLL INJECTION (WINDOWS ALREADY KNOWS WHERE PYTHON IS)
+    // -------------------------------------------------------------------
     void* remoteMemDLL = VirtualAllocEx(hProcess, NULL, dllPath.length() + 1, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (remoteMemDLL == NULL) {
         CloseHandle(hProcess);
