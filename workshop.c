@@ -121,7 +121,7 @@ DWORD WINAPI WinQLX32_Hilo_Polling_Workshop(LPVOID lpParam) {
         if (ciclos_sin_crecimiento >= 3) { 
             if (peso_disco_actual == bytes_esperados_acf) {
                 verificacion_exitosa = TRUE;
-                DebugPrint("[DLL] Reload Workshop Items.\n");
+                DebugPrint("[DLL] Reload Workshop Items...\n");
         
             } else {
                 DebugPrint("Waiting...\n");
@@ -153,18 +153,12 @@ void WinQLX32_Probar_Polling_Manifiesto_ACF(void) {
     _snprintf(g_path_manifiesto_acf, sizeof(g_path_manifiesto_acf), "%s\\steamapps\\workshop\\appworkshop_282440.acf", ruta_base_servidor);
     _snprintf(g_path_content, sizeof(g_path_content), "%s\\steamapps\\workshop\\content\\282440", ruta_base_servidor);
 
-    DebugPrint("[WinQLX32-TEST] -> Inicializando despachador de hilos paralelos de Windows...\n");
-
     //Check workshop dir
     HANDLE hThread = CreateThread(NULL, 0, WinQLX32_Hilo_Polling_Workshop, NULL, 0, NULL);
 
-    if (hThread != NULL) {
-        // Cerramos el descriptor para evitar fugas de memoria (el hilo sigue vivo en background)
+    if (hThread != NULL)
         CloseHandle(hThread);
-        DebugPrint("[WinQLX32-TEST] -> Hilo paralelo despachado con éxito. Control devuelto al motor.\n");
-    } else {
-        DebugPrint("[WinQLX32-ERROR] -> Falló la creación del hilo de Polling paralelo.\n");
-    }
+
 }
 
 /**
@@ -191,9 +185,6 @@ void WinQLX32_Validar_Circuito_Workshop_Local(void) {
 
     // COMPUERTA 1: Si los atributos devuelven INVALID o no es un directorio legítimo...
     if (atributos == INVALID_FILE_ATTRIBUTES || !(atributos & FILE_ATTRIBUTE_DIRECTORY)) {
-        DebugPrint("[WinQLX32-VFS] -> ADVERTENCIA: Carpeta de cache '%s' NO detectada.\n", ruta_steamapps);
-        
-        // ¡ACTIVAMOS LA BANDERA DE EMERGENCIA DE RED!
         g_workshop_necesita_descarga = 1;
         return;
     }

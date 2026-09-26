@@ -121,8 +121,8 @@ This development requires optimizing or fix several areas to pass the beta phase
 | Area | Status | Notes |
 |------|--------|-------|
 | bg_itemlist pointer | Pending | Need more investigation to pinpoint the correct pointer of bg_itemlist required for holdable functions.
-| Missing Hooks | Pending | Need more investigation to pinpoint more functions of quake live binary and qagamex86.dll library.
-| Workshop integration | Pending | Need more investigation to made the full functionality of workshop elements in server and transfer references to clients, the pak00.pk3 contents is working in beta stage.
+| Missing Hooks | Done | Need more investigation to pinpoint more functions of quake live binary and qagamex86.dll library.
+| Workshop integration | Cleaning | Need more investigation to made the full functionality of workshop elements in server and transfer references to clients, the pak00.pk3 contents is working in beta stage.
 | Q3console visibility | Pending | Need a method to inject a code to hide the q3console in windows and put all logging information directly to file or put all logs of WinQLX32 into Q3console if visibility can't be changed.
 | 3rd Party Plugins | Pending | Require more exaustive tests of third party plugins to validate core code and made full compatibility.
 | ZMQ in Python embed | Pending | Add full compatibility with libZMQ to enable minqlx ZMQ procedures for full compatibility.

@@ -193,7 +193,6 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
     Cmd_ExecuteString = (Cmd_ExecuteString_ptr)((uintptr_t)qlds_entry + addr_Cmd_ExecuteString);
     G_FreeEntity = (G_FreeEntity_ptr)((uintptr_t)qlds_entry + addr_G_FreeEntity);
     //SV_Netchan_Transmit = (SV_Netchan_Transmit_ptr)((uintptr_t)qlds_entry + addr_SV_Netchan_Transmit);
-    //G_AddEvent = MISSING!!!!! (Declared in commands.c directly to add events like original function)
 
     // Ready.
     HookStatic();
