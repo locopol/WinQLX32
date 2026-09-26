@@ -36,272 +36,16 @@ int control_workshop = 0;
 // Bandera global que controlará si se debe saltar o activar la descarga en el paso posterior
 int g_workshop_necesita_descarga = 0;
 
+void __cdecl My_Com_InitHunkMemory(void) {
 
-// Declaramos las rutas globales para que el hilo secundario tenga acceso libre
-static char g_path_manifiesto_acf[MAX_PATH] = {0};
-static char g_path_content[MAX_PATH] = {0};
-
-void WinQLX32_Validar_Circuito_Workshop_Local(void);
-void  WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop(void);
-
-/**
- * Sonda de Almacenamiento (Se ejecuta en paralelo)
- */
-uint64_t WinQLX32_Calcular_Peso_Fisico_Directorio(const char* path_raiz) {
-    char mascara_busqueda[MAX_PATH];
-    // Aseguramos el formateo de hardware con el comodín de Windows
-    _snprintf(mascara_busqueda, sizeof(mascara_busqueda), "%s\\*", path_raiz);
-    mascara_busqueda[sizeof(mascara_busqueda) - 1] = '\0';
-
-    WIN32_FIND_DATAA datos_archivo;
-    HANDLE hBusqueda = FindFirstFileA(mascara_busqueda, &datos_archivo);
-    uint64_t acumulado_bytes = 0;
-
-    if (hBusqueda == INVALID_HANDLE_VALUE) {
-        // Si la folder 282440 aún no existe en el disco duro, retornamos 0 de forma segura
-        return 0;
-    }
-
-    do {
-        // Descartamos estrictamente los punteros de navegación del sistema operativo ("." y "..")
-        if (strcmp(datos_archivo.cFileName, ".") == 0 || strcmp(datos_archivo.cFileName, "..") == 0) {
-            continue;
-        }
-
-        // Construimos la ruta absoluta del elemento actual mapeado en la RAM
-        char path_elemento_actual[MAX_PATH];
-        _snprintf(path_elemento_actual, sizeof(path_elemento_actual), "%s\\%s", path_raiz, datos_archivo.cFileName);
-        path_elemento_actual[sizeof(path_elemento_actual) - 1] = '\0';
-
-        // COMPUERTA DE ENTRADA RECURSIVA: Si el elemento es una subcarpeta (ID de un mapa)...
-        if (datos_archivo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            // Saltamos de forma atómica hacia adentro del sub-directorio para sumar sus archivos
-            acumulado_bytes += WinQLX32_Calcular_Peso_Fisico_Directorio(path_elemento_actual);
-        } 
-        // Si es un archivo físico real (.pk3 / .bin)...
-        else {
-            // Amalgamamos los bloques de 32-bits (High/Low) para reconstruir el entero de 64-bits
-            uint64_t tamano_individual = ((uint64_t)datos_archivo.nFileSizeHigh << 32) | datos_archivo.nFileSizeLow;
-            acumulado_bytes += tamano_individual;
-        }
-
-    } while (FindNextFileA(hBusqueda, &datos_archivo));
-
-    FindClose(hBusqueda);
-    return acumulado_bytes;
-}
-
-/**
- * TRABAJADOR ASÍNCRONO (Worker Thread): 
- * Executa el bucle de polling en paralelo sin congelar el hilo principal del juego.
- */
-DWORD WINAPI WinQLX32_Hilo_Polling_Workshop(LPVOID lpParam) {
-    uintptr_t engine_base = (uintptr_t)GetModuleHandleA(NULL);
-    Cmd_ExecuteString_ptr native_Cmd_ExecuteString = (Cmd_ExecuteString_ptr)(engine_base + 0x004619B0); 
-
-    BOOL verificacion_exitosa = FALSE;
-    int iteraciones_bucle = 0;
-    const int max_intentos = 60; 
-
-    // Variables de persistencia para medir el estancamiento del disco
-    uint64_t peso_disco_anterior = 0;
-    int ciclos_sin_crecimiento = 0;
-
-    while (!verificacion_exitosa && iteraciones_bucle < max_intentos) {
-        iteraciones_bucle++;
-
-        // 1. MEDIMOS EL CONTENIDO EN CRECIMIENTO EN ESTE PULSO DE RELOJ
-        uint64_t peso_disco_actual = WinQLX32_Calcular_Peso_Fisico_Directorio(g_path_content);
-
-        // 2. PARSER DEL MANIFIESTO ACF EN EL FRAME ACTUAL
-        FILE* archivo_acf = fopen(g_path_manifiesto_acf, "r");
-        uint64_t bytes_esperados_acf = 0;
-        
-        if (archivo_acf != NULL) {
-            char cadena_linea[512];
-            char buffer_size[64];
-            memset(buffer_size, 0, sizeof(buffer_size));
-
-            while (fgets(cadena_linea, sizeof(cadena_linea), archivo_acf)) {
-                if (strstr(cadena_linea, "\"SizeOnDisk\"")) {
-                    if (sscanf(cadena_linea, " \"SizeOnDisk\" \"%63[^\"]\"", buffer_size) == 1) {
-                        bytes_esperados_acf = _strtoui64(buffer_size, NULL, 10);
-                        break;
-                    }
-                }
-            }
-            fclose(archivo_acf);
-        }
-
-        // TELEMETRÍA IMPEQUEBLE EN TU CONSOLA CONHOST.EXE
-        DebugPrint("[WinQLX32-PARALELO] Ciclo %d | Disco Actual: %llu | Disco Anterior: %llu | Manifiesto (ACF): %llu\n", 
-                   iteraciones_bucle, peso_disco_actual, peso_disco_anterior, bytes_esperados_acf);
-
-        // 3. EVALUACIÓN EXCLUSIVA DE VARIACIÓN COMPARATIVA
-        if (peso_disco_actual > 0 && peso_disco_actual == peso_disco_anterior) {
-            // El directorio ha dejado de crecer en este ciclo de reloj
-            ciclos_sin_crecimiento++;
-        } else {
-            // Sigue entrando flujo de bytes a las carpetas, reiniciamos la compuerta
-            ciclos_sin_crecimiento = 0;
-        }
-
-        // CONDICIÓN CRÍTICA DE VALIDACIÓN: El directorio dejó de crecer Y se equiparó al valor del ACF
-        if (ciclos_sin_crecimiento >= 3) { // Exigimos 1.5 segundos de estancamiento total
-            if (peso_disco_actual == bytes_esperados_acf) {
-                verificacion_exitosa = TRUE;
-                DebugPrint("[WinQLX32-PARALELO] -> ¡ÉXITO! El directorio dejo de crecer y coincide con el ACF. Ejecutando restart.\n");
-                
-
-                
-            } else {
-                // Si el disco se estancó pero no coincide con el ACF, Steam pausó la red por error o hash corrupto
-                DebugPrint("[WinQLX32-AVISO] -> Directorio estancado pero asimetrico frente al ACF. Esperando reanudacion...\n");
-            }
-        }
-
-        // Guardamos el estado físico actual para el análisis del próximo ciclo
-        peso_disco_anterior = peso_disco_actual;
-
-        Sleep(500); 
-    }
-
-    if (!verificacion_exitosa) {
-        DebugPrint("[WinQLX32-PARALELO] -> ALERTA: Timeout sin estabilidad de almacenamiento.\n");
-    } else {
-        WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop();
-    }
-
-    return 0;
-}
-
-/**
- * RUTINA ORIGINAL REFORMULADA: 
- * Prepara las variables locales y delega el bucle síncrono al hilo de fondo de Windows.
- */
-void WinQLX32_Probar_Polling_Manifiesto_ACF(void) {
-    char ruta_base_servidor[MAX_PATH];
-    GetModuleFileNameA(NULL, ruta_base_servidor, MAX_PATH);
-    char* separador = strrchr(ruta_base_servidor, '\\');
-    if (separador) *separador = '\0';
-
-    // Poblamos las rutas globales legibles por el hilo worker
-    _snprintf(g_path_manifiesto_acf, sizeof(g_path_manifiesto_acf), "%s\\steamapps\\workshop\\appworkshop_282440.acf", ruta_base_servidor);
-    _snprintf(g_path_content, sizeof(g_path_content), "%s\\steamapps\\workshop\\content\\282440", ruta_base_servidor);
-
-    DebugPrint("[WinQLX32-TEST] -> Inicializando despachador de hilos paralelos de Windows...\n");
-
-    // ============================================================================
-    // EL QUIEBRE DEL PARADIGMA: APERTURA DEL HILO EN PARALELO
-    // Esta función del Kernel de Windows arranca la rutina de monitoreo de fondo.
-    // Al retornar de inmediato, tu inicializador de WinQLX32 no rompe los hooks.
-    // ============================================================================
-    HANDLE hThread = CreateThread(
-        NULL,                       // Atributos de seguridad por defecto
-        0,                          // Tamaño de la pila por defecto
-        WinQLX32_Hilo_Polling_Workshop, // Dirección de la función trabajadora
-        NULL,                       // Argumentos pasados al hilo
-        0,                          // Banderas de creación inmediatas
-        NULL                        // No requerimos capturar el ID de ID del hilo
-    );
-
-    if (hThread != NULL) {
-        // Cerramos el descriptor para evitar fugas de memoria (el hilo sigue vivo en background)
-        CloseHandle(hThread);
-        DebugPrint("[WinQLX32-TEST] -> Hilo paralelo despachado con éxito. Control devuelto al motor.\n");
-    } else {
-        DebugPrint("[WinQLX32-ERROR] -> Falló la creación del hilo de Polling paralelo.\n");
-    }
-}
-
-/**
- * Rutina de Auditoría de Hardware: Valida la existencia física y densidad de la 
- * carpeta contigua steamapps. Activa la bandera si se requiere intervención de red.
- */
-
-
-void WinQLX32_Validar_Circuito_Workshop_Local(void) {
-    char ruta_steamapps[MAX_PATH];
-    
-    // 1. OBTENEMOS LA RUTA FÍSICA RELATIVA CONTIGUA AL SERVIDOR
-    GetModuleFileNameA(NULL, ruta_steamapps, MAX_PATH);
-    char* last_slash = strrchr(ruta_steamapps, '\\');
-    if (last_slash) {
-        *last_slash = '\0'; // Nos paramos en el directorio raíz del ejecutable
-    }
-    
-    // Apuntamos al nodo raíz del Workshop en el disco duro de Windows
-    strcat(ruta_steamapps, "\\steamapps\\workshop\\content\\282440");
-
-    // 2. INTERROGACIÓN DIRECTA AL KERNEL DE WINDOWS (GetFileAttributesA)
-    DWORD atributos = GetFileAttributesA(ruta_steamapps);
-
-    // COMPUERTA 1: Si los atributos devuelven INVALID o no es un directorio legítimo...
-    if (atributos == INVALID_FILE_ATTRIBUTES || !(atributos & FILE_ATTRIBUTE_DIRECTORY)) {
-        DebugPrint("[WinQLX32-VFS] -> ADVERTENCIA: Carpeta de cache '%s' NO detectada.\n", ruta_steamapps);
-        
-        // ¡ACTIVAMOS LA BANDERA DE EMERGENCIA DE RED!
-        g_workshop_necesita_descarga = 1;
-        return;
-    }
-
-    // COMPUERTA 2: Si el directorio existe, auditamos su tamaño/densidad física en caliente
-    // Buscamos si existen subcarpetas de IDs de mapas mapeadas dentro de la folder 282440
-    char mascara_busqueda[MAX_PATH];
-    _snprintf(mascara_busqueda, sizeof(mascara_busqueda), "%s\\*", ruta_steamapps);
-    
-    WIN32_FIND_DATAA datos_busqueda;
-    HANDLE hFind = FindFirstFileA(mascara_busqueda, &datos_busqueda);
-    
-    int total_archivos_encontrados = 0;
-
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            // Descartamos los punteros de navegación relativos del sistema operativo ( "." y ".." )
-            if (strcmp(datos_busqueda.cFileName, ".") != 0 && strcmp(datos_busqueda.cFileName, "..") != 0) {
-                total_archivos_encontrados++;
-            }
-        } while (FindNextFileA(hFind, &datos_busqueda));
-        
-        FindClose(hFind);
-    }
-
-    // EVALUACIÓN DE TAMAÑO/DENSIDAD POSIBLE: 
-    // If la carpeta está vacía o le faltan las subfolders de las IDs suscritas del torneo...
-    if (total_archivos_encontrados == 0) {
-        DebugPrint("[WinQLX32-VFS] -> ADVERTENCIA: Cache detectada pero vacia (0 sub-folders encontradas).\n");
-        
-        // ¡ACTIVAMOS LA BANDERA! Obligamos al paso posterior a forzar la descarga de las IDs
-        g_workshop_necesita_descarga = 1;
-    } else {
-        DebugPrint("[WinQLX32-VFS] -> Cache validada de forma exitosa (%d sub-folders de mapas activas). Saltando descargas.\n", 
-                   total_archivos_encontrados);
-        
-        // Mantener la bandera apagada para que el juego levante de forma instantánea usando su cache física
-        g_workshop_necesita_descarga = 0;
-    }
-}
-
-
-
-
-typedef void(__cdecl *test2_ptr)(void);
-
-test2_ptr test2 = NULL;
-
-
-void __cdecl my_test2(void) {
-    DebugPrint("PASO POR TEST2\n");
+    // Check Workshop dir
     WinQLX32_Validar_Circuito_Workshop_Local();
-    if(g_workshop_necesita_descarga) {
-        DebugPrint("NECESITA DESCARGA, MANDALO AL FONDO\n");
-    }
-    else {
-        DebugPrint("Quedate aqui e inicializa\n");
+    if(!g_workshop_necesita_descarga) {
         WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop();
     }
 
-    test2();  
+    // Return to init memory hunk
+    Com_InitHunkMemory();  
         
 }
 
@@ -574,18 +318,12 @@ void HookStatic(void) {
         exit(1);
 
     } else {
-/**
-        res = MH_Hook(test,&my_test3,(LPVOID*)&test3);
+
+        res = MH_Hook(addr_Com_InitHunkMemory,&My_Com_InitHunkMemory,(LPVOID*)&Com_InitHunkMemory);
         if (res) {
-            DebugPrint("ERROR: Failed to hook test3: %d\n", res);
+            DebugPrint("ERROR: Failed to hook Com_InitHunkMemory: %d\n", res);
             failed = 1;
-        } else { DebugPrint("[DLL] test3 \t\t- Offset: %p\n", (void*)offset_rel); }
-**/
-        res = MH_Hook(addr_Com_InitHunkMemory,&my_test2,(LPVOID*)&test2);
-        if (res) {
-            DebugPrint("ERROR: Failed to hook test2: %d\n", res);
-            failed = 1;
-        } else { DebugPrint("[DLL] test2 \t\t- Offset: %p\n", (void*)offset_rel); }
+        } else { DebugPrint("[DLL] Com_InitHunkMemory \t\t- Offset: %p\n", (void*)offset_rel); }
       
         res = MH_Hook(addr_Cmd_AddCommand,&My_Cmd_AddCommand,(LPVOID*)&Cmd_AddCommand);
         if (res) {
@@ -605,8 +343,6 @@ void HookStatic(void) {
             DebugPrint("ERROR: Failed to hook Com_Printf: %d\n", res);
             failed = 1;
         } else { DebugPrint("[DLL] Com_Printf \t\t- Offset: %p\n", (void*)offset_rel); }
-
-
 
         #ifndef NOPY
 
@@ -659,83 +395,6 @@ void HookStatic(void) {
     }
 }
 
-void WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop(void) {
-    // 1. RESOLUCIÓN DINÁMICA DE LA RUTA DEL SISTEMA
-    cvar_t* cv_basepath = Cvar_Get("fs_basepath", "", 0);
- 
-    char ruta_txt[MAX_PATH];
-    _snprintf(ruta_txt, sizeof(ruta_txt), "%s\\baseq3\\workshop.txt", cv_basepath->string);
-    ruta_txt[sizeof(ruta_txt) - 1] = '\0';
-
-    // 2. APERTURA CON CONTROL DE FALLO EN EL DISCO DURO (ELSE ASOCIADO)
-    FILE *fp = fopen(ruta_txt, "r");
-    if (fp != NULL) {
-        char linea[256];
-        int conteo_lineas = 0;
-        int items_encolados = 0;
-
-        Com_Printf("[WinQLX32] Loading workshop.txt...\n");
-
-        // 3. BUCLE ITERADOR LÍNEA POR LÍNEA (ESTILO LINUX)
-        while (fgets(linea, sizeof(linea), fp)) {
-            conteo_lineas++;
-
-            // Descarte pasivo rápido de comentarios y saltos de carro huerfanos
-            if (linea[0] == '#' || linea[0] == '\n' || linea[0] == '\r' || linea[0] == '\0') {
-                continue;
-            }
-
-            uint64_t workshop_id_extraido = 0;
-
-            // ============================================================================
-            // INTERCEPTACIÓN Y VALIDACIÓN CON SSCANF (Uso Estricto del C Runtime)
-            // %llu obliga a capturar un entero sin signo de 64-bits.
-            // sscanf devuelve la cantidad de campos parseados con éxito (Debe dar 1).
-            // ============================================================================
-            int campos_leidos = sscanf(linea, "%llu", &workshop_id_extraido);
-
-            if (campos_leidos == 1 && workshop_id_extraido > 0) {
-                // EXTRACCIÓN EXITOSA: Invocamos tu hook nativo para enviar la petición a Steam
-                Com_Printf("[WinQLX32] ");
-                int encolado_ok = idSteamServer_DownloadItem(workshop_id_extraido, qfalse);
-                
-                if (encolado_ok) {
-                    DebugPrint("[WinQLX32-UGC] Linea %d: ID %llu enviada exitosamente a la cola de red.\n", 
-                               conteo_lineas, workshop_id_extraido);
-                    //Com_Printf("[WinQLX32] Workshop item %llu requested ...\n");
-                    items_encolados++;
-                } else {
-                    DebugPrint("[WinQLX32-UGC] Linea %d: El hook idSteamServer_DownloadItem rechazo la ID %llu.\n", 
-                               conteo_lineas, workshop_id_extraido);
-                }
-            } 
-            // 4. CONTROL DE FALLO EN EL CONTENIDO (Línea corrupta, letras, caracteres especiales)
-            else {
-                // Quitamos el salto de linea final para imprimir un log estetico en la consola
-                //strtok(linea, "\r\n");
-                //DebugPrint("[WinQLX32-AVISO] Fallo en Contenido (Linea %d): '%s' no es una ID valida de 64-bits. Descartando...\n", 
-                //           conteo_lineas, linea);
-            }
-        }
-
-        control_workshop = 1;
-        fclose(fp);
-        if (items_encolados > 0) {
-            Com_Printf("[WinQLX32] Worshop items require restart after download, pending items: %d\n", items_encolados);
-
-        } else {
-            Com_Printf("[WinQLX32] Workshop items loaded.\n");
-        }
-    } 
-    // 5. CONTROL DE FALLO EN LECTURA DE ARCHIVO (Archivo borrado o ruta rota)
-    else {
-        Com_Printf("[WinQLX32] Skipping workshop.txt\n");
-    }
-}
-
-
-
-
 /* 
  * Hooks VM calls. Not all use Hook, since the VM calls are stored in a table of
  * pointers. We simply set our function pointer to the current pointer in the table and
@@ -756,10 +415,10 @@ void HookVm(void) {
 
 
     if(g_workshop_necesita_descarga) {
+        Sleep(500);
         WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop();
         WinQLX32_Probar_Polling_Manifiesto_ACF();
     }
-
 
     if (qagame_base == NULL) return;
 
