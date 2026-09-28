@@ -31,17 +31,18 @@ void* qagame_entry = NULL;
 uintptr_t hook_base;
 qboolean skipFrameDispatcher;
 uintptr_t* offset_rel; // for logging
-int control_workshop = 0;
 
 // Bandera global que controlará si se debe saltar o activar la descarga en el paso posterior
-int g_workshop_necesita_descarga = 0;
+qboolean workshop_flag;
 
 void __cdecl My_Com_InitHunkMemory(void) {
-
-    // Check Workshop dir
-    WinQLX32_Validar_Circuito_Workshop_Local();
-    if(!g_workshop_necesita_descarga) {
-        WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop();
+    // InitHunkMemory run before initgame and can be used to load all downloaded workshop items 
+    // to use the parameter "set serverstartup" in server.cfg.
+    // this parameter can be used "AFTER DOWNLOADING" workshop items, If used "BEFORE", the circuit breaks :-(. 
+    // First check workshop directory
+    workshop_flag = workshop_check_content();
+    if(workshop_flag) { // if ok in disk, load items
+        workshop_process();
     }
 
     // Return to init memory hunk
@@ -50,7 +51,8 @@ void __cdecl My_Com_InitHunkMemory(void) {
 }
 
 void __cdecl My_Cmd_AddCommand(char* cmd, void* func) {
-    if (!common_initialized) InitializeStatic();
+    if (!common_initialized) 
+        InitializeStatic();
 
     Cmd_AddCommand(cmd, func);
 }
@@ -220,17 +222,14 @@ void __cdecl My_SV_SendMessageToClient(msg_t* msg, client_t* client) {
 }
 
 void __cdecl My_G_InitGame(int levelTime, int randomSeed, int restart) {
-    Com_Printf("[minqlx] Started in G_InitGame\n");
+    Com_Printf("[WinQLX32] Started in G_InitGame\n");
     G_InitGame(levelTime, randomSeed, restart);
 
     if (!cvars_initialized) { // Only called once.
         SetTag();
     }
     InitializeCvars();
-    if(control_workshop) {
 
-        DebugPrint("AQUI REINICIAR POR RECARGA\n");
-    }
 
 #ifndef NOPY
     if (restart) {
@@ -413,14 +412,13 @@ void HookVm(void) {
 
     hook_base = (uintptr_t)qagame_base;
 
-
-    if(g_workshop_necesita_descarga) {
-        Sleep(500);
-        WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop();
-        WinQLX32_Probar_Polling_Manifiesto_ACF();
-    }
-
     if (qagame_base == NULL) return;
+
+    if(!workshop_flag) { // download workshop items, monitor and reload
+        Sleep(500);
+        workshop_process();
+        workshop_dir_polling_thread();
+    }
 
     // Init RelPointer of VM
     uintptr_t* vmt_table = (uintptr_t*)((uintptr_t)qagame_base + rel_VmCall_table);

@@ -83,8 +83,8 @@ float RandomFloatWithNegative(void);
 void* PatternSearch(void* address, size_t length, const char* pattern, const char* mask);
 
 //Workshop
-void WinQLX32_Validar_Circuito_Workshop_Local(void);
-void  WinQLX32_Ejecutar_Lectura_Y_Presentacion_Workshop(void);
+qboolean workshop_check_content(void);
+void workshop_process(void);
 
 // Internal QL function pointer types.
 typedef void(__cdecl *Com_Printf_ptr)(char *fmt, ...);
@@ -94,7 +94,7 @@ typedef char *(__cdecl *Cmd_Argv_ptr)(int arg);
 typedef int(__cdecl *Cmd_Argc_ptr)(void);
 typedef void(__cdecl *Cmd_TokenizeString_ptr)(const char *text_in);
 typedef void(__cdecl *Cbuf_ExecuteText_ptr)(int exec_when, const char *text);
-typedef cvar_t* (__cdecl* Cvar_FindVar_ptr)(const char *var_name);
+typedef cvar_t *(__cdecl* Cvar_FindVar_ptr)(const char *var_name);
 typedef cvar_t *(__cdecl *Cvar_Get_ptr)(const char *var_name, const char *var_value, int flags);
 typedef cvar_t *(__cdecl *Cvar_GetLimit_ptr)(const char *var_name, const char *var_value, const char *min, const char *max, int flag);
 typedef cvar_t *(__cdecl *Cvar_Set2_ptr)(const char *var_name, const char *value, qboolean force);
