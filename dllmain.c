@@ -57,6 +57,7 @@ SV_SpawnServer_ptr SV_SpawnServer  = NULL;
 Cmd_ExecuteString_ptr Cmd_ExecuteString = NULL;
 idSteamServer_DownloadItem_ptr idSteamServer_DownloadItem = NULL;
 SV_Netchan_Transmit_ptr SV_Netchan_Transmit = NULL;
+Com_InitHunkMemory_ptr Com_InitHunkMemory = NULL;
 
 // VM functions
 VM_Create_ptr VM_Create = NULL;
@@ -71,6 +72,8 @@ LaunchItem_ptr LaunchItem = NULL;
 Drop_Item_ptr Drop_Item = NULL;
 G_StartKamikaze_ptr G_StartKamikaze = NULL;
 G_FreeEntity_ptr G_FreeEntity = NULL;
+G_ShutdownGame_ptr G_ShutdownGame = NULL;
+
 
 // VM global variables.
 gentity_t* g_entities;
@@ -190,7 +193,6 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
     Cmd_ExecuteString = (Cmd_ExecuteString_ptr)((uintptr_t)qlds_entry + addr_Cmd_ExecuteString);
     G_FreeEntity = (G_FreeEntity_ptr)((uintptr_t)qlds_entry + addr_G_FreeEntity);
     //SV_Netchan_Transmit = (SV_Netchan_Transmit_ptr)((uintptr_t)qlds_entry + addr_SV_Netchan_Transmit);
-    //G_AddEvent = MISSING!!!!! (Declared in commands.c directly to add events like original function)
 
     // Ready.
     HookStatic();

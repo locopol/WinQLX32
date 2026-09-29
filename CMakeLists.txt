@@ -65,7 +65,8 @@ message(STATUS "Build type: '${CMAKE_BUILD_TYPE}'")
     #misc.c
      
     # minqlxtended
-    demos.c	
+    demos.c
+    workshop.c
  )
 
 if(NOPY) 

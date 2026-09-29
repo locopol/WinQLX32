@@ -31,9 +31,26 @@ void* qagame_entry = NULL;
 uintptr_t hook_base;
 qboolean skipFrameDispatcher;
 uintptr_t* offset_rel; // for logging
+qboolean workshop_flag;
+
+void __cdecl My_Com_InitHunkMemory(void) {
+    // InitHunkMemory run before initgame and can be used to load all downloaded workshop items 
+    // to use the parameter "set serverstartup" in server.cfg.
+    // this parameter can be used "AFTER DOWNLOADING" workshop items, If used "BEFORE", the circuit breaks :-(. 
+    // First check workshop directory
+    workshop_flag = workshop_check_content();
+    if(workshop_flag) { // if ok in disk, load items
+        workshop_process();
+    }
+
+    // Return to init memory hunk
+    Com_InitHunkMemory();  
+        
+}
 
 void __cdecl My_Cmd_AddCommand(char* cmd, void* func) {
-    if (!common_initialized) InitializeStatic();
+    if (!common_initialized) 
+        InitializeStatic();
 
     Cmd_AddCommand(cmd, func);
 }
@@ -47,19 +64,20 @@ void* __cdecl My_VM_Create(int name, unsigned int b, unsigned int c, int d) {
             uintptr_t struct_address = (uintptr_t)result_vm_t;
             void* pp_struct = *(void**)(struct_address + 0x40);
 
-            if (pp_struct != NULL) { // && pp_struct != qagame_base) {
+            if (pp_struct != NULL && pp_struct != qagame_base) {
                 qagame_base = pp_struct;
                 DebugPrint("[VM] struct intercepted \t- Offset: %p\n", (void*)struct_address);
                 DebugPrint("[VM] qagamex86.dll captured \t- Offset: %p\n", qagame_base);
                 if (common_initialized) {
+
                     HookVm();
                     InitializeVm();
                     // patch pending, need more investigation
                     //patch_vm();
                 }
             } else {
-                //return result_vm_t;
-                DebugPrint("[VM] > Nothing Intercepted <\n");
+                return result_vm_t;
+                //DebugPrint("[VM] > Nothing Intercepted <\n");
             }
 
         } else {
@@ -202,13 +220,14 @@ void __cdecl My_SV_SendMessageToClient(msg_t* msg, client_t* client) {
 }
 
 void __cdecl My_G_InitGame(int levelTime, int randomSeed, int restart) {
-    Com_Printf("[minqlx] Started in G_InitGame\n");
+    Com_Printf("[WinQLX32] Started in G_InitGame\n");
     G_InitGame(levelTime, randomSeed, restart);
 
     if (!cvars_initialized) { // Only called once.
         SetTag();
     }
     InitializeCvars();
+
 
 #ifndef NOPY
     if (restart) {
@@ -296,7 +315,13 @@ void HookStatic(void) {
         exit(1);
 
     } else {
-  
+
+        res = MH_Hook(addr_Com_InitHunkMemory,&My_Com_InitHunkMemory,(LPVOID*)&Com_InitHunkMemory);
+        if (res) {
+            DebugPrint("ERROR: Failed to hook Com_InitHunkMemory: %d\n", res);
+            failed = 1;
+        } else { DebugPrint("[DLL] Com_InitHunkMemory \t\t- Offset: %p\n", (void*)offset_rel); }
+      
         res = MH_Hook(addr_Cmd_AddCommand,&My_Cmd_AddCommand,(LPVOID*)&Cmd_AddCommand);
         if (res) {
             DebugPrint("ERROR: Failed to hook Cmd_AddCommand: %d\n", res);
@@ -387,6 +412,12 @@ void HookVm(void) {
 
     if (qagame_base == NULL) return;
 
+    if(!workshop_flag) { // download workshop items, monitor and reload
+        Sleep(500);
+        workshop_process();
+        workshop_dir_polling_thread();
+    }
+
     // Init RelPointer of VM
     uintptr_t* vmt_table = (uintptr_t*)((uintptr_t)qagame_base + rel_VmCall_table);
     DebugPrint("[VMT] vm_t struct \t\t- Offset: %p\n",(void*)vmt_table);
@@ -451,6 +482,7 @@ void HookVm(void) {
     } else {
         DebugPrint("[VMT] ERROR: Windows denied index [%d] access.\n", vmt_i);
     }
+
    
     res = MH_Hook(addr_G_StartKamikaze,&My_G_StartKamikaze,(LPVOID*)&G_StartKamikaze);
     if (res) {
@@ -468,6 +500,8 @@ void HookVm(void) {
     if (failed) { DebugPrint("[VM] Hooking process failed, exiting.\n"); exit(1); }
 
     #endif
+
+  
 
 }
 
@@ -545,3 +579,4 @@ static int Sys_IsLANAddress(void) {
     //lanaddress_audit(interfaces_ptr,ips_array); // (Optional audit)
     return 0;
 }
+

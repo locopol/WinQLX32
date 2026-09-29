@@ -35,8 +35,18 @@ Configuration
         Default: plugin_manager, essentials, motd, permission, ban, silence, clan, names, log, workshop.
     qlx_pluginsPath: The path (either relative or absolute) to the directory with the plugins.
         Default: minqlx-plugins
+    qlx_database: The default database to use. You should not change this unless you know what you're doing. (deprecated)
+        Default: Redis 
     qlx_commandPrefix: The prefix used before command names in order to execute them.
         Default: !
+    qlx_redisAddress: The address to the Redis database. Can be a path if qlx_redisUnixSocket is "1". (deprecated)
+        Default: 127.0.0.1
+    qlx_redisDatabase: The Redis database number. (deprecated)
+        Default: 0
+    qlx_redisUnixSocket: A boolean that determines whether or not qlx_redisAddress is a path to a UNIX socket. (deprecated)
+        Default: 0
+    qlx_redisPassword: The password to the Redis server, if any. (deprecated)
+        Default: None
     qlx_logs: The maximum number of logs the server keeps. 0 means no limit.
         Default: 5
     qlx_logsSize: The maximum size in bytes of a log before it backs it up and starts on a fresh file. 0 means no limit.
@@ -44,6 +54,43 @@ Configuration
 
     (NOTE): All redis Cvars are deprecated, all db logic is controlled by the redis wrapper to store data via "Shelve Python module" to store persistent data in database file relative to winqlx.dll path.
 
+**WinQLX32** like minqlx in Linux, can download workshop items automatically and sync cache in server to send the required items to clients (using set workshopReferences cvar); the first step before run is add the ID's on WORKSHOP.TXT and If you see stuff like the following, then you know it's working like it should:
+
+```
+src\clientdll\contentupdatecontext.cpp (2037) : Install library folder not found
+[WinQLX32] [DLL] Workshop dir: 90518 Kb...
+[WinQLX32] [DLL] Workshop dir: 97952 Kb...
+src\clientdll\contentupdatecontext.cpp (2036) : Staging library folder not found
+src\clientdll\contentupdatecontext.cpp (2036) : Staging library folder not found
+src\clientdll\contentupdatecontext.cpp (2037) : Install library folder not found
+src\clientdll\contentupdatecontext.cpp (2037) : Install library folder not found
+[WinQLX32] [DLL] Workshop dir: 101681 Kb...
+[WinQLX32] [DLL] Reload Workshop Items...
+[minqlx.handle_console_print] DEBUG: Workshop item 585892371: in cache.
+[minqlx.handle_console_print] DEBUG: Not recording a demo.
+[minqlx.handle_console_print] DEBUG: ----- FS_Startup -----
+[minqlx.handle_console_print] DEBUG: Current search path:
+[minqlx.handle_console_print] DEBUG: D:\steamapps\common\qlive\baseq3\pak00.pk3 (0x15a37833 - 9285 files)
+[minqlx.handle_console_print] DEBUG: D:\steamapps\common\qlive\baseq3\bin.pk3 (0x7c1d0d5e - 5 files)
+[minqlx.handle_console_print] DEBUG: D:\steamapps\common\qlive/baseq3
+[minqlx.handle_console_print] DEBUG: D:\steamapps\common\qlive\steamapps\workshop\content\282440\585892371\\soundbank.pk3 (0x5935bb40 - 85 files)
+```
+
+After this, restart the server again, and the Workshop items will load automatically when the dedicated server starts:
+
+```
+[WinQLX32] [DLL] Workshop items loaded: 11.
+[WinQLX32] [VM] struct intercepted      - Offset: 0176FA20
+[WinQLX32] [VM] qagamex86.dll captured  - Offset: 19EA0000
+[WinQLX32] [VMT] vm_t struct            - Offset: 19F2FD08
+[WinQLX32] [VMT] G_InitGame             - Offset: 05001B40
+[WinQLX32] [DLL] Sys_IsLANAddress FIX   - Offset: 017600B8
+[WinQLX32] [VMT] G_RunFrame             - Offset: 05001C10
+[WinQLX32] [VMT] ClientConnect          - Offset: 05001A00
+[WinQLX32] [VM] G_StartKamikaze         - Offset: 19F0FF20
+[WinQLX32] [VM] ClientSpawn             - Offset: 19EDBC30
+[WinQLX32] [Main] Init VM pointers...
+```
 
 Usage
 =====
@@ -113,8 +160,8 @@ This development requires optimizing or fix several areas to pass the beta phase
 | Area | Status | Notes |
 |------|--------|-------|
 | bg_itemlist pointer | Pending | Need more investigation to pinpoint the correct pointer of bg_itemlist required for holdable functions.
-| Missing Hooks | Pending | Need more investigation to pinpoint more functions of quake live binary and qagamex86.dll library.
-| Workshop integration | In-Progress | Need more investigation to made the full functionality of workshop elements in server and transfer references to clients, the pak00.pk3 contents is working in beta stage.
+| Missing Hooks | Done | Need more investigation to pinpoint more functions of quake live binary and qagamex86.dll library.
+| Workshop integration | Done | The code is implemented to integrate the downloading of Workshop items and automate the cache reload in server to synchronize with clients.
 | Q3console visibility | Pending | Need a method to inject a code to hide the q3console in windows and put all logging information directly to file or put all logs of WinQLX32 into Q3console if visibility can't be changed.
 | 3rd Party Plugins | Pending | Require more exaustive tests of third party plugins to validate core code and made full compatibility.
 | ZMQ in Python embed | Pending | Add full compatibility with libZMQ to enable minqlx ZMQ procedures for full compatibility.

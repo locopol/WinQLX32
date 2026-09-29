@@ -29,6 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define addr_SV_SendMessageToClient 0xe5900 
 #define addr_SV_ExecuteClientCommand 0xE0090
 #define addr_Com_Printf 0xC9860
+#define addr_Com_InitHunkMemory 0xcbba0
 
 #define addr_Cmd_Argc 0xc7ED0
 #define addr_Cmd_Argv 0xc7EE0
@@ -63,17 +64,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define addr_Cmd_ExecuteString 0xC8320
 
 #define addr_G_FreeEntity 0x5a660 // ??
-#define rel_pp_bg_itemlist 0x39730
+#define rel_pp_bg_itemlist 0x39730 // ??
 
-/* PENDING!!
-#define addr_G_AddEvent 0x6c660 // ??
-
-
+/*
 ¿Required?
 #define LaunchItem ? 
 #define G_Damage?
-
 */
 
-#define prueba 0x66fbb
 #endif /* PATTERNS_H */

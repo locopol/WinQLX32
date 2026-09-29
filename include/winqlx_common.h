@@ -82,6 +82,10 @@ float RandomFloat(void);
 float RandomFloatWithNegative(void);
 void* PatternSearch(void* address, size_t length, const char* pattern, const char* mask);
 
+//Workshop
+qboolean workshop_check_content(void);
+void workshop_process(void);
+
 // Internal QL function pointer types.
 typedef void(__cdecl *Com_Printf_ptr)(char *fmt, ...);
 typedef void(__cdecl *Cmd_AddCommand_ptr)(char *cmd, void *func);
@@ -90,7 +94,7 @@ typedef char *(__cdecl *Cmd_Argv_ptr)(int arg);
 typedef int(__cdecl *Cmd_Argc_ptr)(void);
 typedef void(__cdecl *Cmd_TokenizeString_ptr)(const char *text_in);
 typedef void(__cdecl *Cbuf_ExecuteText_ptr)(int exec_when, const char *text);
-typedef cvar_t* (__cdecl* Cvar_FindVar_ptr)(const char *var_name);
+typedef cvar_t *(__cdecl* Cvar_FindVar_ptr)(const char *var_name);
 typedef cvar_t *(__cdecl *Cvar_Get_ptr)(const char *var_name, const char *var_value, int flags);
 typedef cvar_t *(__cdecl *Cvar_GetLimit_ptr)(const char *var_name, const char *var_value, const char *min, const char *max, int flag);
 typedef cvar_t *(__cdecl *Cvar_Set2_ptr)(const char *var_name, const char *value, qboolean force);
@@ -113,6 +117,7 @@ typedef int(__cdecl *idSteamServer_DownloadItem_ptr)(uint64_t workshopId, qboole
 typedef void(__cdecl *SV_SendMessageToClient_ptr)(msg_t *msg, client_t *client);
 typedef void(__cdecl *SV_Netchan_Transmit_ptr)(client_t* client, msg_t* msg);
 typedef void(__cdecl *MSG_WriteBits_ptr)(msg_t *msg, int value, int bits);
+typedef void(__cdecl *Com_InitHunkMemory_ptr)(void);
 
 // Some of them are initialized by Initialize(), but not all of them necessarily.
 extern Com_Printf_ptr Com_Printf;
@@ -142,8 +147,10 @@ extern VM_Create_ptr VM_Create;                             // Replacement of Sy
 extern idSteamServer_DownloadItem_ptr idSteamServer_DownloadItem;
 extern SV_Netchan_Transmit_ptr SV_Netchan_Transmit;
 extern SV_SendMessageToClient_ptr SV_SendMessageToClient;
+extern Com_InitHunkMemory_ptr Com_InitHunkMemory;
 
 // VM functions.
+typedef void(__cdecl *G_ShutdownGame_ptr)(int restart);
 typedef void(__cdecl *G_RunFrame_ptr)(int time);
 typedef void(__cdecl *G_InitGame_ptr)(int levelTime, int randomSeed, int restart);
 typedef int(__cdecl *CheckPrivileges_ptr)(gentity_t *ent, char *cmd);
@@ -158,6 +165,7 @@ typedef void(__cdecl *G_StartKamikaze_ptr)(gentity_t *ent);
 typedef void(__cdecl *G_FreeEntity_ptr)(gentity_t *ed);
 
 // VM functions.
+extern G_ShutdownGame_ptr G_ShutdownGame;
 extern G_RunFrame_ptr G_RunFrame;
 extern G_InitGame_ptr G_InitGame;
 extern CheckPrivileges_ptr CheckPrivileges;
@@ -172,6 +180,7 @@ extern G_StartKamikaze_ptr G_StartKamikaze;
 extern G_FreeEntity_ptr G_FreeEntity;
 
 // Server replacement functions for hooks.
+void __cdecl My_G_ShutdownGame(int restart);
 void __cdecl My_Cmd_AddCommand(char *cmd, void *func);
 void* __cdecl My_VM_Create(int a, unsigned int b, unsigned int c, int d);
 #ifndef NOPY
