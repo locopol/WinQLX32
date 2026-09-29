@@ -52,7 +52,7 @@ Configuration
     qlx_logsSize: The maximum size in bytes of a log before it backs it up and starts on a fresh file. 0 means no limit.
         Default: 5000000 (5 MB)
 
-**WinQLX32** like minqlx in Linux, can download workshop items automatically and sync cache in server to send the required items to clients; the first step before run is add the ID's on WORKSHOP.TXT and If you see stuff like the following, then you know it's working like it should:
+**WinQLX32** like minqlx in Linux, can download workshop items automatically and sync cache in server to send the required items to clients (using set workshopReferences cvar); the first step before run is add the ID's on WORKSHOP.TXT and If you see stuff like the following, then you know it's working like it should:
 
 ```
 src\clientdll\contentupdatecontext.cpp (2037) : Install library folder not found
