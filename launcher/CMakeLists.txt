@@ -14,7 +14,8 @@ project(WinQLX32_Launcher)
 set(SOURCES
     src/injector.cpp
     src/watcher.cpp
-    src/main.cpp	
+    src/main.cpp
+    src/resources.rc
  )
 
 include_directories(include src)

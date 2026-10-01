@@ -320,7 +320,7 @@ void HookStatic(void) {
         if (res) {
             DebugPrint("ERROR: Failed to hook Com_InitHunkMemory: %d\n", res);
             failed = 1;
-        } else { DebugPrint("[DLL] Com_InitHunkMemory \t\t- Offset: %p\n", (void*)offset_rel); }
+        } else { DebugPrint("[DLL] Com_InitHunkMemory \t- Offset: %p\n", (void*)offset_rel); }
       
         res = MH_Hook(addr_Cmd_AddCommand,&My_Cmd_AddCommand,(LPVOID*)&Cmd_AddCommand);
         if (res) {

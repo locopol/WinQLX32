@@ -222,7 +222,8 @@ BOOL WINAPI DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
 
         case DLL_PROCESS_DETACH:
             // If dll is unloaded, can clean hooks or anything else, nothing for now
-            break;
+            //break;
+            DebugPrint("Exit\n");
     }
     return TRUE;
 }
