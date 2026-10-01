@@ -64,7 +64,7 @@ void* __cdecl My_VM_Create(int name, unsigned int b, unsigned int c, int d) {
             uintptr_t struct_address = (uintptr_t)result_vm_t;
             void* pp_struct = *(void**)(struct_address + 0x40);
 
-            if (pp_struct != NULL && pp_struct != qagame_base) {
+            if (pp_struct != NULL) {
                 qagame_base = pp_struct;
                 DebugPrint("[VM] struct intercepted \t- Offset: %p\n", (void*)struct_address);
                 DebugPrint("[VM] qagamex86.dll captured \t- Offset: %p\n", qagame_base);
