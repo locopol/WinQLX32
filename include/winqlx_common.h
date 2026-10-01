@@ -117,7 +117,8 @@ typedef int(__cdecl *idSteamServer_DownloadItem_ptr)(uint64_t workshopId, qboole
 typedef void(__cdecl *SV_SendMessageToClient_ptr)(msg_t *msg, client_t *client);
 typedef void(__cdecl *SV_Netchan_Transmit_ptr)(client_t* client, msg_t* msg);
 typedef void(__cdecl *MSG_WriteBits_ptr)(msg_t *msg, int value, int bits);
-typedef void(__cdecl *Com_InitHunkMemory_ptr)(void);
+typedef void(__cdecl *Com_InitHunkMemory_ptr)(void); // workshop hook
+typedef void(__cdecl *CL_Shutdown_ptr)(void); // last hook for safe exit
 
 // Some of them are initialized by Initialize(), but not all of them necessarily.
 extern Com_Printf_ptr Com_Printf;
@@ -148,6 +149,7 @@ extern idSteamServer_DownloadItem_ptr idSteamServer_DownloadItem;
 extern SV_Netchan_Transmit_ptr SV_Netchan_Transmit;
 extern SV_SendMessageToClient_ptr SV_SendMessageToClient;
 extern Com_InitHunkMemory_ptr Com_InitHunkMemory;
+extern CL_Shutdown_ptr CL_Shutdown;
 
 // VM functions.
 typedef void(__cdecl *G_ShutdownGame_ptr)(int restart);

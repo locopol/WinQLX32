@@ -1,0 +1,36 @@
+#include "winres.h"
+
+1 ICON "app_icon.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    0,1,3,0
+PRODUCTVERSION 0,5,4,0
+FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS     VS_FF_DEBUG
+#else
+ FILEFLAGS     0x0L
+#endif
+FILEOS         VOS__WINDOWS32
+FILETYPE       VFT_APP
+FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription",  "WinQLX32 Launcher for Quake Live\0"
+            VALUE "FileVersion",      "0.1.3.0\0"
+            VALUE "InternalName",     "minqlx\0"
+            VALUE "LegalCopyright",   "Paul Asalgado (Aka TabLoN)\0"
+            VALUE "OriginalFilename", "launcher.exe\0"
+            VALUE "ProductName",      "WinQLX32\0"
+            VALUE "ProductVersion",   "0.5.4.0\0"
+            VALUE "Comments",         "WinQLX32 hooks for Quake Live Dedicated Server\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
