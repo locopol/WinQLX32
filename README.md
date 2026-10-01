@@ -4,7 +4,7 @@ WinQLX32
 minqlx is a modification to the Quake Live Dedicated Server that extends Quake Live's dedicated server with
 extra functionality and allows scripting of server behavior through an embedded Python interpreter.
 
-
+This version is a native **port** of original **minqlx** developed by *MinoMino* (https://github.com/MinoMino/minqlx) 
 and the enhancements of *tjone270* (https://github.com/tjone270/minqlxtended) to made compatible with Windows 
 and official 32 bit version of Steam binaries of **Quake Live** (1069 compilation)
 
@@ -52,7 +52,7 @@ Configuration
     qlx_logsSize: The maximum size in bytes of a log before it backs it up and starts on a fresh file. 0 means no limit.
         Default: 5000000 (5 MB)
 
-
+    (NOTE): All redis Cvars are deprecated, all db logic is controlled by the redis wrapper to store data via "Shelve Python module" to store persistent data in database file relative to winqlx.dll path.
 
 **WinQLX32** like minqlx in Linux, can download workshop items automatically and sync cache in server to send the required items to clients (using set workshopReferences cvar); the first step before run is add the ID's on WORKSHOP.TXT and If you see stuff like the following, then you know it's working like it should:
 
@@ -141,7 +141,7 @@ If you want modify some parts of core for testing or debugging, the source code 
             - `cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -B build -DPY_PATH=<your Python path installation>`
     - compile with: `cmake --build build --config Release`
 
-
+    - After succesful compilation, the dll file (`winqlx.dll`), the zip file (`minqlx.zip`) and `launcher.exe` are copied to `bin\` directory, put these files into Quake Live installation directory and test. *(remember put the embed python version in deps\python_embed directory and minqlx-plugins in base Quake Live directory)*.
 
 Contribute
 ==========
@@ -163,9 +163,9 @@ This development requires optimizing or fix several areas to pass the beta phase
 | Missing Hooks | Done | Need more investigation to pinpoint more functions of quake live binary and qagamex86.dll library.
 | Workshop integration | Done | The code is implemented to integrate the downloading of Workshop items and automate the cache reload in server to synchronize with clients.
 | Q3console visibility | Pending | Need a method to inject a code to hide the q3console in windows and put all logging information directly to file or put all logs of WinQLX32 into Q3console if visibility can't be changed.
-| 3rd Party Plugins | Pending | Require more exaustive tests of third party plugins to validate core code and made full compatibility.
+| 3rd Party Plugins | In Progress | Require more exaustive tests of third party plugins to validate core code and made full compatibility.
 | ZMQ in Python embed | Pending | Add full compatibility with libZMQ to enable minqlx ZMQ procedures for full compatibility.
-| Launcher refactor | Pending | The rudimentary launcher is used to hook a unique quakelive_steam.exe process with winqlx.dll, so, the launcher can't work with multiple instances in the same server.
+| Launcher refactor | In Progress | The rudimentary launcher is used to hook a unique quakelive_steam.exe process with winqlx.dll, so, the launcher can't work with multiple instances in the same server.
 | Custom Python Path | Pending | Cmakefile only compile the sources to get Python files from relative path of Quake Live binary (deps\python_embed), the Launcher need a refactor to implement environment variables or parameters in Cmakefile to find dinamically the Embedded or full installation of Python.
 | PatternSearch routines | Pending | The current beta run the hooks using direct calls to pointers for working, the main code need reutilize the pattern routines to optimize search functions.
 
