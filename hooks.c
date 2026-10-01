@@ -31,6 +31,8 @@ void* qagame_entry = NULL;
 uintptr_t hook_base;
 qboolean skipFrameDispatcher;
 uintptr_t* offset_rel; // for logging
+
+// Bandera global que controlará si se debe saltar o activar la descarga en el paso posterior
 qboolean workshop_flag;
 
 void __cdecl My_Com_InitHunkMemory(void) {
@@ -64,7 +66,7 @@ void* __cdecl My_VM_Create(int name, unsigned int b, unsigned int c, int d) {
             uintptr_t struct_address = (uintptr_t)result_vm_t;
             void* pp_struct = *(void**)(struct_address + 0x40);
 
-            if (pp_struct != NULL) {
+            if (pp_struct != NULL && pp_struct != qagame_base) {
                 qagame_base = pp_struct;
                 DebugPrint("[VM] struct intercepted \t- Offset: %p\n", (void*)struct_address);
                 DebugPrint("[VM] qagamex86.dll captured \t- Offset: %p\n", qagame_base);
