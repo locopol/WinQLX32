@@ -58,6 +58,7 @@ Cmd_ExecuteString_ptr Cmd_ExecuteString = NULL;
 idSteamServer_DownloadItem_ptr idSteamServer_DownloadItem = NULL;
 SV_Netchan_Transmit_ptr SV_Netchan_Transmit = NULL;
 Com_InitHunkMemory_ptr Com_InitHunkMemory = NULL;
+CL_Shutdown_ptr CL_Shutdown = NULL;
 
 // VM functions
 VM_Create_ptr VM_Create = NULL;
@@ -73,7 +74,6 @@ Drop_Item_ptr Drop_Item = NULL;
 G_StartKamikaze_ptr G_StartKamikaze = NULL;
 G_FreeEntity_ptr G_FreeEntity = NULL;
 G_ShutdownGame_ptr G_ShutdownGame = NULL;
-
 
 // VM global variables.
 gentity_t* g_entities;
@@ -204,26 +204,28 @@ BOOL WINAPI DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
         case DLL_PROCESS_ATTACH:
 
-    HMODULE hQagame = GetModuleHandleA(NULL);
+        HMODULE hQagame = GetModuleHandleA(NULL);
 
-    if (hQagame != NULL && qlds_base == NULL) {
-        qlds_base = (void*)hQagame;
-        qlds_entry = (void*)hQagame; // only Win32, the base point to the beginning of PE header
-    } 
-            // Disable unnecessary thread calls to optimize performance
-            DisableThreadLibraryCalls(hModule);
-            
-            // Make a native Windows thread to run WinQLX in background
-            HANDLE hThread = CreateThread(NULL, 0, MainThread, NULL, 0, NULL);
-            if (hThread) {
-                CloseHandle(hThread); // Close the handler, the thread is still alive
-            }
-            break;
+        if (hQagame != NULL && qlds_base == NULL) {
+            qlds_base = (void*)hQagame;
+            qlds_entry = (void*)hQagame; // only Win32, the base point to the beginning of PE header
+        }
+        // Disable unnecessary thread calls to optimize performance
+        DisableThreadLibraryCalls(hModule);
+        
+        // Make a native Windows thread to run WinQLX in background
+        HANDLE hThread = CreateThread(NULL, 0, MainThread, NULL, 0, NULL);
+        if (hThread) {
+            CloseHandle(hThread); // Close the handler, the thread is still alive
+        }
+        break;
 
         case DLL_PROCESS_DETACH:
             // If dll is unloaded, can clean hooks or anything else, nothing for now
-            break;
+            DebugPrint("[DLL] Detach...\n");
+            break;  
+
+            
     }
     return TRUE;
 }
-    

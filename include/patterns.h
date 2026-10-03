@@ -66,6 +66,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define addr_G_FreeEntity 0x5a660 // ??
 #define rel_pp_bg_itemlist 0x39730 // ??
 
+#define addr_CL_Shutdown 0xb9e10
+
 /*
 ¿Required?
 #define LaunchItem ? 

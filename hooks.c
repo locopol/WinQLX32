@@ -33,6 +33,11 @@ qboolean skipFrameDispatcher;
 uintptr_t* offset_rel; // for logging
 qboolean workshop_flag;
 
+void __cdecl My_CL_Shutdown() {
+    //Future use
+    CL_Shutdown();
+}
+
 void __cdecl My_Com_InitHunkMemory(void) {
     // InitHunkMemory run before initgame and can be used to load all downloaded workshop items 
     // to use the parameter "set serverstartup" in server.cfg.
@@ -316,11 +321,17 @@ void HookStatic(void) {
 
     } else {
 
+        res = MH_Hook(addr_CL_Shutdown,&My_CL_Shutdown,(LPVOID*)&CL_Shutdown);
+        if (res) {
+            DebugPrint("ERROR: Failed to hook CL_Shutdown: %d\n", res);
+            failed = 1;
+        } else { DebugPrint("[DLL] CL_Shutdown \t- Offset: %p\n", (void*)offset_rel); }
+
         res = MH_Hook(addr_Com_InitHunkMemory,&My_Com_InitHunkMemory,(LPVOID*)&Com_InitHunkMemory);
         if (res) {
             DebugPrint("ERROR: Failed to hook Com_InitHunkMemory: %d\n", res);
             failed = 1;
-        } else { DebugPrint("[DLL] Com_InitHunkMemory \t\t- Offset: %p\n", (void*)offset_rel); }
+        } else { DebugPrint("[DLL] Com_InitHunkMemory \t- Offset: %p\n", (void*)offset_rel); }
       
         res = MH_Hook(addr_Cmd_AddCommand,&My_Cmd_AddCommand,(LPVOID*)&Cmd_AddCommand);
         if (res) {
