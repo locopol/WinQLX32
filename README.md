@@ -204,7 +204,7 @@ Installation
 
 **NOTE** : Install the required Microsoft Redistributable packages to make winqlx and launcher works, Quake Live installed with SteamCMD contains the required redists for install,  Microsoft Visual C++ Redistributable package for 32 bits is available [here](https://aka.ms/vc14/vc_redist.x86.exe).
 **NOTE** : If run in Windows 11, disable Smart App Control (SAC) because `launcher.exe` has not digitally signed.
-**NOTE** : The code in some runs enter in a **race condition** and can't hook the necesary functions to work (the log console must show the `late.init` minqlx initialization), this can be resolved closing the Quake Live console (pressing `Quit` button) and launch the script again.
+**NOTE** : WinQLX32 in some runs enter in a **race condition** and can't hook the necesary functions to work (the log console must show the `late.init` minqlx initialization), this can be resolved closing the Quake Live console (pressing `Quit` button) and launch the script again.
 
 Configuration
 =============
