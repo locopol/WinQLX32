@@ -1,6 +1,6 @@
 @ECHO OFF
 
-SET HOMEPATH=D:\temp
+SET HOMEPATH=D:\quakelive\config
 SET /a GAMEPORT=%1 + 27960
 SET /a RCONPORT=%1 + 28960
 

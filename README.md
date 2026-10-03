@@ -17,12 +17,14 @@ Installation
 ============
 
 - To make the release work on Quake Live in Windows, download the embedded version of Python 3.11 for 32 bits, available [here](https://www.python.org/ftp/python/3.11.1/python-3.11.1-embed-win32.zip).
-- Download the latest [release](https://www.github.com/locopol/WinQLX32/releases/latest) and extract the contents in your Quake Live base folder (installed via Steam Client or SteamCMD for Windows).
+- Download the latest [release](https://www.github.com/locopol/WinQLX32/releases/latest) and extract the contents in your Quake Live base folder installed via SteamCMD for Windows (recommended method).
 - Download the latest MinoMino minqlx plugins available [here](https://github.com/MinoMino/minqlx-plugins/releases/tag/v0.3.7) and extract the folder in Quake Live base folder, rename the extracted folder to `minqlx-plugins`
 - Copy the contents of Python embedded zip in folder `[Quake Live directory]\deps\python_embed`.
 
-- execute `run_server_x86_WinQLX32.bat` script and wait the qconsole initialization, if you have a trouble, run as `administrator`.
+- execute `run_server_x86_WinQLX32.bat` (for run and test) or `run_instance_x86_WinQLX32.bat` (for multiple instances) script and wait the qconsole initialization, if you have a trouble, run as `administrator`.
 
+**NOTE** : Install the required Microsoft Redistributable packages to make winqlx and launcher works, Quake Live installed with SteamCMD contains the required redists for install,  Microsoft Visual C++ Redistributable package for 32 bits is available [here](https://aka.ms/vc14/vc_redist.x86.exe).
+**NOTE** : If run in Windows 11, disable Smart App Control (SAC) because `launcher.exe` has not digitally signed.
 **NOTE** : The code in some runs enter in a **race condition** and can't hook the necesary functions to work (the log console must show the `late.init` minqlx initialization), this can be resolved closing the Quake Live console (pressing `Quit` button) and launch the script again.
 
 Configuration
@@ -52,9 +54,9 @@ Configuration
     qlx_logsSize: The maximum size in bytes of a log before it backs it up and starts on a fresh file. 0 means no limit.
         Default: 5000000 (5 MB)
 
-    (NOTE): All redis Cvars are deprecated, all db logic is controlled by the redis wrapper to store data via "Shelve Python module" to store persistent data in database file relative to winqlx.dll path.
+    (NOTE): All redis Cvars are deprecated, all db logic is controlled by a redis wrapper to store data into "Shelve Python module" persistent data file, relative to winqlx.dll path.
 
-**WinQLX32** like minqlx in Linux, can download workshop items automatically and sync cache in server to send the required items to clients (using set workshopReferences cvar); the first step before run is add the ID's on WORKSHOP.TXT and If you see stuff like the following, then you know it's working like it should:
+**WinQLX32** like minqlx in Linux, can download workshop items automatically and sync cache in server to send the required items to clients (using set workshopReferences cvar); the first step before run `launcher.exe` is add the ID's on `WORKSHOP.TXT` and If you see stuff like the following, then you know it's working like it should:
 
 ```
 src\clientdll\contentupdatecontext.cpp (2037) : Install library folder not found
@@ -76,7 +78,7 @@ src\clientdll\contentupdatecontext.cpp (2037) : Install library folder not found
 [minqlx.handle_console_print] DEBUG: D:\steamapps\common\qlive\steamapps\workshop\content\282440\585892371\\soundbank.pk3 (0x5935bb40 - 85 files)
 ```
 
-After this, restart the server again, and the Workshop items will load automatically when the dedicated server starts:
+After this, restart the server again (using the helper scripts), and the Workshop items will load automatically when the dedicated server starts:
 
 ```
 [WinQLX32] [DLL] Workshop items loaded: 11.
@@ -165,7 +167,7 @@ This development requires optimizing or fix several areas to pass the beta phase
 | Q3console visibility | Pending | Need a method to inject a code to hide the q3console in windows and put all logging information directly to file or put all logs of WinQLX32 into Q3console if visibility can't be changed.
 | 3rd Party Plugins | In Progress | Require more exaustive tests of third party plugins to validate core code and made full compatibility.
 | ZMQ in Python embed | Pending | Add full compatibility with libZMQ to enable minqlx ZMQ procedures for full compatibility.
-| Launcher refactor | In Progress | The rudimentary launcher is used to hook a unique quakelive_steam.exe process with winqlx.dll, so, the launcher can't work with multiple instances in the same server.
+| Launcher refactor | Done | The rudimentary launcher now directly execute quakelive_steam.exe with strictly force "set dedicated 1" parameter to get the specific process id and hook winqlx library by every instance.
 | Custom Python Path | Pending | Cmakefile only compile the sources to get Python files from relative path of Quake Live binary (deps\python_embed), the Launcher need a refactor to implement environment variables or parameters in Cmakefile to find dinamically the Embedded or full installation of Python.
 | PatternSearch routines | Pending | The current beta run the hooks using direct calls to pointers for working, the main code need reutilize the pattern routines to optimize search functions.
 
